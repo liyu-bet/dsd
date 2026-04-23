@@ -1,0 +1,166 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Server {
+  id              String        @id @default(cuid())
+  name            String
+  ip              String
+  user            String
+  password        String?
+  panelType       String?       @default("none")
+  panelUrl        String?
+  panelLogin      String?
+  panelPassword   String?
+  monitorToken    String?       @unique
+  status          String        @default("offline")
+  cpuUsage        Float         @default(0)
+  ramUsage        Float         @default(0)
+  diskUsage       Float         @default(0)
+  sitesJson       String?       @default("[]")
+  lastHeartbeatAt DateTime?
+  updatedAt       DateTime      @updatedAt
+  uptime          String?       @default("0m")
+  hostingAccountId String?
+  billingRenewalAt DateTime?
+  billingServiceId String?
+  billingHasUnpaidOrder Boolean @default(false)
+  loadAvg         String?       @default("0.00, 0.00, 0.00")
+  sysMetrics      String?       @default("{}")
+  createdAt       DateTime      @default(now())
+  checks          ServerCheck[]
+  sites           Site[]
+  hostingAccount  HostingAccount? @relation(fields: [hostingAccountId], references: [id], onDelete: SetNull)
+
+  @@index([hostingAccountId])
+}
+
+model ServerCheck {
+  id         String   @id @default(cuid())
+  serverId   String
+  status     String
+  cpuUsage   Float
+  ramUsage   Float
+  isIncident Boolean  @default(false)
+  trigger    String   @default("scheduled")
+  bucketType String   @default("interval")
+  createdAt  DateTime @default(now())
+  server     Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId, bucketType, createdAt])
+  @@index([serverId, trigger, createdAt])
+}
+
+model Site {
+  id            String             @id @default(cuid())
+  url           String             @unique
+  tags          String?            @default("[]")
+  serverId      String?
+  status        String             @default("unknown")
+  lastPingMs    Int                @default(0)
+  isDnsValid    Boolean            @default(true)
+  techStack     String?            @default("{}")
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  group         String?
+  comment       String?
+  adminLogin    String?
+  adminPassword String?
+  adminUrl      String?
+  cfAccountId        String?
+  registrarAccountId String?
+  domainExpiresAt    DateTime?
+  apexARecord        String?
+  apexARecordSource  String?
+  apexARecordUpdatedAt DateTime?
+  publicDnsInfoJson     String?
+  publicDnsInfoUpdatedAt  DateTime?
+  whoisInfoJson          String?
+  whoisInfoUpdatedAt     DateTime?
+  cfAccount          CloudflareAccount? @relation(fields: [cfAccountId], references: [id])
+  registrarAccount   RegistrarAccount?  @relation(fields: [registrarAccountId], references: [id])
+  server             Server?            @relation(fields: [serverId], references: [id])
+  checks             SiteCheck[]
+
+  @@index([serverId])
+  @@index([cfAccountId])
+  @@index([registrarAccountId])
+}
+
+model SiteCheck {
+  id         String   @id @default(cuid())
+  siteId     String
+  status     String
+  pingMs     Int
+  statusCode Int
+  trigger    String   @default("scheduled")
+  createdAt  DateTime @default(now())
+  site       Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId, createdAt])
+  @@index([siteId, trigger, createdAt])
+}
+
+model CloudflareAccount {
+  id        String   @id @default(cuid())
+  name      String
+  login     String
+  password  String
+  apiToken  String?
+  apiKey    String?
+  createdAt DateTime @default(now())
+  sites     Site[]
+}
+
+model JobLock {
+  jobName     String   @id
+  isRunning   Boolean  @default(false)
+  lockedAt    DateTime @default(now())
+  lockedUntil DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model JobRun {
+  id           String   @id @default(cuid())
+  jobName      String
+  trigger      String   @default("worker")
+  status       String   @default("running")
+  processed    Int      @default(0)
+  successCount Int      @default(0)
+  failureCount Int      @default(0)
+  errorText    String?
+  metadataJson String?
+  startedAt    DateTime @default(now())
+  finishedAt   DateTime?
+
+  @@index([jobName, startedAt])
+  @@index([status, startedAt])
+}
+
+model RegistrarAccount {
+  id        String   @id @default(cuid())
+  name      String
+  url       String?
+  login     String
+  password  String?
+  apiKey    String?
+  createdAt DateTime @default(now())
+  sites     Site[]
+}
+
+model HostingAccount {
+  id        String   @id @default(cuid())
+  name      String
+  url       String?
+  login     String
+  password  String?
+  apiKey    String?
+  createdAt DateTime @default(now())
+  servers   Server[]
+}

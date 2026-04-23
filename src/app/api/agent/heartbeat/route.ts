@@ -1,0 +1,90 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+
+    const {
+      token,
+      serverId,
+      cpuPercent,
+      memoryPercent,
+      diskPercent,
+      load1,
+      load5,
+      load15,
+      uptimeSeconds,
+      discoveredDomains,
+      sysMetrics,
+    } = body || {};
+
+    if (!token) {
+      return NextResponse.json({ error: 'Missing token' }, { status: 400 });
+    }
+
+    const server = await prisma.server.findFirst({
+      where: {
+        monitorToken: token,
+        ...(serverId ? { id: serverId } : {}),
+      },
+    });
+
+    if (!server) {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    }
+
+    const discovered = Array.isArray(discoveredDomains)
+      ? discoveredDomains.filter((domain) => typeof domain === 'string' && domain.length > 2)
+      : [];
+
+    const uptimeValue =
+      typeof uptimeSeconds === 'number' && Number.isFinite(uptimeSeconds)
+        ? `${Math.max(0, Math.floor(uptimeSeconds))}s`
+        : server.uptime ?? '0m';
+
+    const loadAvgValue = [load1, load5, load15]
+      .filter((value) => value !== undefined && value !== null)
+      .map((value) => Number(value).toFixed(2))
+      .join(', ');
+
+    const sysMetricsJson = JSON.stringify({
+      ...(sysMetrics && typeof sysMetrics === 'object' ? sysMetrics : {}),
+      discoveredDomains: discovered,
+      source: 'agent-heartbeat',
+    });
+
+    await prisma.server.update({
+      where: { id: server.id },
+      data: {
+        status: 'online',
+        cpuUsage: Number(cpuPercent || 0),
+        ramUsage: Number(memoryPercent || 0),
+        diskUsage: Number(diskPercent || 0),
+        uptime: uptimeValue,
+        loadAvg: loadAvgValue || server.loadAvg || '0.00',
+        sitesJson: JSON.stringify(discovered),
+        sysMetrics: sysMetricsJson,
+        lastHeartbeatAt: new Date(),
+      },
+    });
+
+    if (discovered.length > 0) {
+      await Promise.all(
+        discovered.map((url) =>
+          prisma.site.upsert({
+            where: { url },
+            update: { serverId: server.id },
+            create: { url, serverId: server.id },
+          })
+        )
+      );
+    }
+
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error('Agent heartbeat error:', error);
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+  }
+}

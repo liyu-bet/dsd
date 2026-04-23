@@ -1,0 +1,1 @@
+ALTER TABLE "Site" ADD COLUMN "comment" TEXT;

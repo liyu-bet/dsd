@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #f4f7ff;
+  --foreground: #0f172a;
+  --panel: rgba(255,255,255,0.72);
+  --panel-border: rgba(56,189,248,0.18);
+  --glow-blue: 0 0 30px rgba(56, 189, 248, 0.12);
+  --glow-pink: 0 0 30px rgba(217, 70, 239, 0.10);
+}
+
+[class~="dark"] {
+  --background: #0b0f19;
+  --foreground: #f8fafc;
+  --panel: rgba(15,18,25,0.8);
+  --panel-border: rgba(56,189,248,0.16);
+  --glow-blue: 0 0 30px rgba(56, 189, 248, 0.18);
+  --glow-pink: 0 0 30px rgba(217, 70, 239, 0.16);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgba(56,189,248,.10), transparent 30%),
+    radial-gradient(circle at top right, rgba(217,70,239,.08), transparent 30%),
+    var(--background);
+  color: var(--foreground);
+}
+
+* {
+  scrollbar-color: rgba(34, 211, 238, 0.35) transparent;
+}
+
+::selection {
+  background: rgba(34, 211, 238, 0.24);
+  color: #ffffff;
+}

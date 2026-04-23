@@ -1,0 +1,12 @@
+# Подключать поверх основного compose: образы с GitHub вместо сборки на сервере.
+# Запуск: docker compose -f docker-compose.yml -f docker-compose.ghcr.yml pull && docker compose -f docker-compose.yml -f docker-compose.ghcr.yml up -d
+#
+# После первого успешного publish в Actions проверьте имена пакетов в ghcr.io (owner/repo).
+
+services:
+  web:
+    image: ghcr.io/liyu-bet/dsd-web:latest
+    build: null
+  work:
+    image: ghcr.io/liyu-bet/dsd-work:latest
+    build: null

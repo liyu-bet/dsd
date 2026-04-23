@@ -1,0 +1,2 @@
+ALTER TABLE "Server"
+ADD COLUMN IF NOT EXISTS "lastHeartbeatAt" TIMESTAMP(3);
