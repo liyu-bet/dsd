@@ -796,8 +796,8 @@ export default function Dashboard() {
 
         {activeTab === 'servers' && (
           <div className="animate-in fade-in duration-500">
-            <header className="mb-10 flex flex-wrap items-end justify-between gap-5">
-              <div className="min-w-0">
+            <header className="mb-10 flex flex-col gap-5 xl:flex-row xl:flex-nowrap xl:items-end xl:justify-between">
+              <div className="min-w-0 xl:flex-1 xl:min-w-0">
                 <h2 className="mb-2 text-3xl font-black uppercase tracking-tight text-slate-900 dark:text-white sm:text-4xl">
                   Инфраструктура
                 </h2>
@@ -832,7 +832,7 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="w-full max-w-[520px] self-end rounded-3xl border border-slate-200/90 bg-white/85 p-2.5 shadow-sm dark:border-slate-700/80 dark:bg-slate-900/70">
+              <div className="w-full max-w-[520px] shrink-0 self-stretch rounded-3xl border border-slate-200/90 bg-white/85 p-2.5 shadow-sm dark:border-slate-700/80 dark:bg-slate-900/70 sm:self-end xl:ml-auto xl:w-[520px] xl:max-w-none">
                 <div className="flex flex-col gap-2.5">
                   <div className="grid grid-cols-2 gap-2.5">
                     <button
