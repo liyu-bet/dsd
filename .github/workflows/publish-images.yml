@@ -64,3 +64,23 @@ jobs:
             ${{ env.IMAGE_WORK }}:${{ steps.sha.outputs.short }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Сразу после публикации образов — pull + up на твоём VPS (нужны secrets в репозитории).
+  deploy:
+    name: Deploy on server
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    steps:
+      - name: Pull images and restart stack
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd /var/www/dsd-m7
+            docker compose -f docker-compose.yml -f docker-compose.ghcr.yml pull
+            docker compose -f docker-compose.yml -f docker-compose.ghcr.yml up -d
+          script_stop: true
