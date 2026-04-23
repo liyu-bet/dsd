@@ -8,6 +8,7 @@ import {
   collectUnpaidServiceIds,
   infernoPostJson,
   collectPendingOrderMeta,
+  collectPendingAmounts,
   parseGetinfoResponse,
   billingUnpaidFromInfernoOrders,
 } from '@/lib/inferno-api';
@@ -38,6 +39,7 @@ export async function syncInfernoFromPayloads(
   ];
   const unpaidServiceIds = collectUnpaidServiceIds(orderLikeRows);
   const pendingMeta = collectPendingOrderMeta(ordersPayload, invoicesPayload);
+  const pendingAmounts = collectPendingAmounts(ordersPayload, invoicesPayload);
 
   let matched = 0;
   let checked = 0;
@@ -86,6 +88,14 @@ export async function syncInfernoFromPayloads(
         serverIp: server.ip,
       });
 
+    // Compute approximate unpaid amount for this service/ip
+    let amt = 0;
+    const byService = pendingAmounts.byServiceId || {};
+    const byIp = pendingAmounts.byIp || {};
+    if (byService[sid]) amt += Number(byService[sid]) || 0;
+    const nip = normIp(ip);
+    if (byIp[nip]) amt += Number(byIp[nip]) || 0;
+
     await prisma.server.update({
       where: { id: server.id },
       data: {
@@ -93,6 +103,8 @@ export async function syncInfernoFromPayloads(
         billingServiceId: sid,
         billingRenewalAt: renewal,
         billingHasUnpaidOrder: unpaid,
+        billingUnpaidCount: unpaid ? 1 : 0,
+        billingUnpaidAmount: Math.round((amt + Number.EPSILON) * 100) / 100,
       },
     });
     matched += 1;
@@ -144,6 +156,19 @@ export async function syncInfernoHostingRemote(params: {
         serverIp: server.ip,
       });
 
+      // compute unpaid amount for any of parsed.billingServiceIds or ip/order
+      const pendingAmounts = collectPendingAmounts(params.ordersPayload, params.invoicesPayload);
+      let amt = 0;
+      const byService = pendingAmounts.byServiceId || {};
+      const byIp = pendingAmounts.byIp || {};
+      const byOrder = pendingAmounts.byOrderId || {};
+      for (const id of parsed.billingServiceIds || []) {
+        if (id && byService[id]) amt += Number(byService[id]) || 0;
+      }
+      const nip = parsed.dedicatedIp ? normIp(parsed.dedicatedIp) : normIp(server.ip);
+      if (byIp[nip]) amt += Number(byIp[nip]) || 0;
+      if (parsed.orderId && byOrder[parsed.orderId]) amt += Number(byOrder[parsed.orderId]) || 0;
+
       await prisma.server.update({
         where: { id: server.id },
         data: {
@@ -151,6 +176,8 @@ export async function syncInfernoHostingRemote(params: {
           billingServiceId: extId,
           billingRenewalAt: parsed.renewal,
           billingHasUnpaidOrder: unpaid,
+          billingUnpaidCount: unpaid ? 1 : 0,
+          billingUnpaidAmount: Math.round((amt + Number.EPSILON) * 100) / 100,
         },
       });
       matched += 1;

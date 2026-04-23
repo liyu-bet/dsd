@@ -218,7 +218,7 @@ function isInfernoUnpaidOrderRow(r: Record<string, unknown>): boolean {
 }
 
 /** ID услуг из заказа/счёта и вложенных позиций (WHMCS: invoices[].items[].relid). */
-function extractRelatedIdsFromOrderLikeRow(r: Record<string, unknown>): string[] {
+export function extractRelatedIdsFromOrderLikeRow(r: Record<string, unknown>): string[] {
   const out = new Set<string>();
   const visit = (obj: unknown, depth: number) => {
     if (depth > 10) return;
@@ -320,6 +320,70 @@ export function collectPendingOrderMeta(ordersPayload: unknown, invoicesPayload?
     }
   }
   return { pendingOrderIds, pendingIps, pendingServiceIds };
+}
+
+/** Собирает суммы неоплаченных позиций (orders/invoices) и группирует их по serviceId, ip и orderId. */
+export function collectPendingAmounts(ordersPayload: unknown, invoicesPayload?: unknown | null): {
+  byServiceId: Record<string, number>;
+  byIp: Record<string, number>;
+  byOrderId: Record<string, number>;
+  totalAmount: number;
+  totalCount: number;
+} {
+  const rows = [
+    ...normalizeInfernoList(ordersPayload),
+    ...normalizeInfernoList(invoicesPayload ?? null),
+  ];
+  const byService = new Map<string, number>();
+  const byIp = new Map<string, number>();
+  const byOrder = new Map<string, number>();
+  let total = 0;
+  let count = 0;
+
+  for (const ord of rows) {
+    const r = asRecord(ord);
+    if (!r) continue;
+    if (!isInfernoUnpaidOrderRow(r)) continue;
+
+    const rawAmount = pickString(r, ['amount', 'total', 'invoice_total', 'sum']) || '0';
+    const amt = Number(String(rawAmount).replace(/[^0-9\.\-]/g, '')) || 0;
+    if (!amt || amt <= 0) {
+      // count still incremented to indicate presence
+      count += 1;
+    } else {
+      total += amt;
+      count += 1;
+    }
+
+    const oid = pickString(r, ['orderid', 'order_id']);
+    if (oid) {
+      byOrder.set(oid, (byOrder.get(oid) || 0) + amt);
+    }
+
+    const ip = pickString(r, ['dedicatedip', 'ip', 'address']);
+    if (ip) {
+      byIp.set(normalizeIpToken(ip).toLowerCase(), (byIp.get(normalizeIpToken(ip).toLowerCase()) || 0) + amt);
+    }
+
+    const related = extractRelatedIdsFromOrderLikeRow(r);
+    for (const sid of related) {
+      byService.set(sid, (byService.get(sid) || 0) + amt);
+    }
+  }
+
+  const objFromMap = (m: Map<string, number>) => {
+    const o: Record<string, number> = {};
+    for (const [k, v] of m.entries()) o[k] = v;
+    return o;
+  };
+
+  return {
+    byServiceId: objFromMap(byService),
+    byIp: objFromMap(byIp),
+    byOrderId: objFromMap(byOrder),
+    totalAmount: total,
+    totalCount: count,
+  };
 }
 
 export function billingUnpaidFromInfernoOrders(
