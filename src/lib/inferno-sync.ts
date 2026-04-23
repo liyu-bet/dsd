@@ -82,6 +82,7 @@ export async function syncInfernoFromPayloads(
       unpaidServiceIds.has(sid) ||
       billingUnpaidFromInfernoOrders(pendingMeta, {
         serviceId: sid,
+        serviceIds: [sid],
         serverIp: server.ip,
       });
 
@@ -135,10 +136,11 @@ export async function syncInfernoHostingRemote(params: {
           ? parsed.orderId
           : parsed.serviceId && parsed.serviceId !== '0'
             ? parsed.serviceId
-            : null;
+            : parsed.billingServiceIds[0] || null;
       const unpaid = billingUnpaidFromInfernoOrders(meta, {
         orderId: parsed.orderId,
         serviceId: parsed.serviceId,
+        serviceIds: parsed.billingServiceIds.length > 0 ? parsed.billingServiceIds : null,
         serverIp: server.ip,
       });
 

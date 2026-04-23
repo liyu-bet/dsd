@@ -1151,20 +1151,16 @@ export default function Dashboard() {
                               </div>
 
                               <span
-                                className={`relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border shadow-sm ${
-                                  server.billingHasUnpaidOrder
-                                    ? 'border-amber-200/90 bg-amber-50 text-amber-800 dark:border-amber-500/25 dark:bg-amber-950/40 dark:text-amber-200'
-                                    : 'border-slate-200/90 bg-slate-50 text-slate-600 dark:border-slate-600/40 dark:bg-slate-800/60 dark:text-slate-300'
-                                }`}
+                                className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200/90 bg-slate-50 text-slate-600 shadow-sm dark:border-slate-600/40 dark:bg-slate-800/60 dark:text-slate-300"
                                 title={
                                   server.billingHasUnpaidOrder
-                                    ? 'Есть неоплаченный заказ по этой услуге'
-                                    : 'Статус оплаты (неоплаченные заказы подсвечиваются)'
+                                    ? 'В личном кабинете биллинга есть неоплаченные счета по этой услуге.'
+                                    : 'Оплата: индикатор обновляется при синхронизации биллинга (заказы Pending и неоплаченные счета).'
                                 }
                               >
                                 <DollarSign size={13} />
                                 {server.billingHasUnpaidOrder ? (
-                                  <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-amber-50 dark:ring-amber-950/60" />
+                                  <span className="absolute right-1 top-1 h-2 w-2 rounded-full border border-white bg-red-500 dark:border-[#141820]" aria-hidden />
                                 ) : null}
                               </span>
                             </div>

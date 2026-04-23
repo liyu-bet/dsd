@@ -1,6 +1,10 @@
 /**
  * Inferno VPS API (api_client.php, X-Key). Официально: KB «API документация — VPS» v1.4 (22.04.2026).
  * Аутентификация: только заголовок X-Key (Client ID в ключе). Рекомендуется IP whitelist для ключа.
+ *
+ * Счета: в KB v1.4 нет отдельного раздела про action=invoices; у WHMCS/Inferno часто есть список счетов
+ * с позициями (items[].relid → услуга). Синхронизация запрашивает invoices при наличии метода и
+ * сопоставляет неоплаченные строки с VPS по orderid, IP, serviceid и вложенным relid.
  */
 
 export function resolveInfernoApiUrl(panelUrl: string | null | undefined): string | null {
@@ -196,8 +200,11 @@ function isInfernoUnpaidOrderRow(r: Record<string, unknown>): boolean {
       invStatus.includes('ожид') ||
       invStatus === '0');
 
-  // Счета (invoices) — invnum / invoicenum, статус в другом наборе полей
-  if (r.invoicenum != null && String(r.invoicenum).trim() !== '') {
+  // Счета (invoices) — invoiceid / invoicenum, статус в другом наборе полей
+  const hasInvoiceRef =
+    (r.invoicenum != null && String(r.invoicenum).trim() !== '') ||
+    (r.invoiceid != null && String(r.invoiceid).trim() !== '');
+  if (hasInvoiceRef) {
     const st = (pickString(r, ['status', 'invoicestatus', 'statustext', 'invoicestatustext']) || '').toLowerCase();
     if (st) {
       const isPaid = st.includes('paid') || st.includes('оплач') || st.includes('cancelled') || st.includes('отмен');
@@ -208,6 +215,44 @@ function isInfernoUnpaidOrderRow(r: Record<string, unknown>): boolean {
   }
 
   return explicitlyUnpaid || statusUnpaid || invUnpaid;
+}
+
+/** ID услуг из заказа/счёта и вложенных позиций (WHMCS: invoices[].items[].relid). */
+function extractRelatedIdsFromOrderLikeRow(r: Record<string, unknown>): string[] {
+  const out = new Set<string>();
+  const visit = (obj: unknown, depth: number) => {
+    if (depth > 10) return;
+    const rec = asRecord(obj);
+    if (!rec) return;
+    const sid = pickString(rec, [
+      'serviceid',
+      'service_id',
+      'vpsid',
+      'vps_id',
+      'relid',
+      'related_id',
+      'hostingid',
+      'hosting_id',
+    ]);
+    if (sid) out.add(sid);
+    const products = pickString(rec, ['productids', 'product_ids', 'productIds']);
+    if (products) {
+      for (const p of products.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean)) {
+        out.add(p);
+      }
+    }
+    const nestKeys = ['items', 'invoiceitems', 'lineitems', 'lines', 'item', 'products', 'services', 'result', 'data', 'invoice', 'hosting'];
+    for (const nk of nestKeys) {
+      const v = rec[nk];
+      if (Array.isArray(v)) {
+        for (const el of v) visit(el, depth + 1);
+      } else if (v && typeof v === 'object') {
+        visit(v, depth + 1);
+      }
+    }
+  };
+  visit(r, 0);
+  return [...out];
 }
 
 export function collectUnpaidServiceIds(orders: unknown): Set<string> {
@@ -225,6 +270,9 @@ export function collectUnpaidServiceIds(orders: unknown): Set<string> {
       for (const p of products.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean)) {
         pending.add(p);
       }
+    }
+    for (const id of extractRelatedIdsFromOrderLikeRow(r)) {
+      pending.add(id);
     }
   }
   return pending;
@@ -267,36 +315,63 @@ export function collectPendingOrderMeta(ordersPayload: unknown, invoicesPayload?
     }
     const sid = pickString(r, ['serviceid', 'service_id', 'vpsid', 'vps_id', 'relid', 'related_id']);
     if (sid) pendingServiceIds.add(sid);
+    for (const id of extractRelatedIdsFromOrderLikeRow(r)) {
+      pendingServiceIds.add(id);
+    }
   }
   return { pendingOrderIds, pendingIps, pendingServiceIds };
 }
 
 export function billingUnpaidFromInfernoOrders(
   meta: ReturnType<typeof collectPendingOrderMeta>,
-  ctx: { orderId?: string | null; serviceId?: string | null; serverIp: string }
+  ctx: { orderId?: string | null; serviceId?: string | null; serviceIds?: string[] | null; serverIp: string }
 ): boolean {
   const nip = normalizeIpToken(ctx.serverIp).toLowerCase();
   const oid = ctx.orderId ? String(ctx.orderId).trim() : '';
   if (oid && oid !== '0' && meta.pendingOrderIds.has(oid)) return true;
   if (nip && meta.pendingIps.has(nip)) return true;
-  const sid = ctx.serviceId ? String(ctx.serviceId).trim() : '';
-  if (sid && meta.pendingServiceIds.has(sid)) return true;
+  const fromList =
+    ctx.serviceIds && ctx.serviceIds.length > 0
+      ? ctx.serviceIds
+      : ctx.serviceId
+        ? [ctx.serviceId]
+        : [];
+  for (const raw of fromList) {
+    const sid = String(raw || '').trim();
+    if (sid && sid !== '0' && meta.pendingServiceIds.has(sid)) return true;
+  }
   return false;
 }
 
-/** Док.: GET getinfo с orderid=0 и ip — dedicatedip, nextduedate, orderid, orderStatus. */
+/** Док.: POST getinfo с orderid=0 и ip — dedicatedip, nextduedate, orderid, orderStatus. */
 export function parseGetinfoResponse(info: unknown): {
   orderId: string | null;
   serviceId: string | null;
+  /** Все ID услуги/продукта из ответа — для сопоставления со счетами (productids и т.п.). */
+  billingServiceIds: string[];
   renewal: Date | null;
   dedicatedIp: string | null;
 } | null {
   if (!infernoPayloadSuccess(info)) return null;
   const r = asRecord(info);
   if (!r) return null;
+  const serviceId = pickString(r, ['serviceid', 'service_id', 'productid', 'product_id']);
+  const billingServiceIds = new Set<string>();
+  const addId = (v: string | null | undefined) => {
+    const t = v?.trim();
+    if (t && t !== '0') billingServiceIds.add(t);
+  };
+  addId(serviceId);
+  const productBlob = pickString(r, ['productids', 'product_ids', 'productIds']);
+  if (productBlob) {
+    for (const p of productBlob.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean)) {
+      addId(p);
+    }
+  }
   return {
     orderId: pickString(r, ['orderid', 'order_id']),
-    serviceId: pickString(r, ['serviceid', 'service_id', 'productid', 'product_id']),
+    serviceId,
+    billingServiceIds: [...billingServiceIds],
     renewal: extractRenewalDate(r),
     dedicatedIp: pickString(r, ['dedicatedip', 'dedicated_ip', 'ip']),
   };
