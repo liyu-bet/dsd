@@ -7,6 +7,8 @@ FROM base AS deps
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma
 RUN npm ci
+# Ensure Prisma client is generated in deps stage so builder/web stages have prisma available
+RUN npx prisma generate
 
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
