@@ -796,11 +796,13 @@ export default function Dashboard() {
 
         {activeTab === 'servers' && (
           <div className="animate-in fade-in duration-500">
-            <header className="flex justify-between items-end mb-10">
-              <div>
-                <h2 className="text-4xl font-black text-slate-900 dark:text-white mb-2 uppercase tracking-tight">Инфраструктура</h2>
-                <div className="mt-3 inline-flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white/85 px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
-                  <div className="flex items-center gap-4 flex-wrap">
+            <header className="mb-10 flex flex-wrap items-end justify-between gap-5">
+              <div className="min-w-0">
+                <h2 className="mb-2 text-3xl font-black uppercase tracking-tight text-slate-900 dark:text-white sm:text-4xl">
+                  Инфраструктура
+                </h2>
+                <div className="mt-3 inline-flex flex-col gap-2 rounded-[28px] border border-slate-200 bg-white/85 px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
+                  <div className="flex flex-wrap items-center gap-4">
                     <span className="inline-flex items-center gap-1.5">
                       <Server size={12} className="text-slate-400" />
                       Всего: <span className="text-slate-900 dark:text-white">{servers.length}</span>
@@ -824,38 +826,42 @@ export default function Dashboard() {
                   </div>
                   <div className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 ${serversForRenewalSoon > 0 ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300' : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300'}`}>
                     <Bell size={12} className={serversForRenewalSoon > 0 ? 'text-rose-500' : 'text-emerald-500'} />
-                    <span>Серверов на продление до 7 дней:</span>
+                    <span>На продление до 7 дней:</span>
                     <span className={serversForRenewalSoon > 0 ? 'text-red-500 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}>{serversForRenewalSoon}</span>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 relative">
-                <button
-                  onClick={handleManualRefresh}
-                  disabled={isManualRefreshing}
-                  className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 px-5 rounded-2xl shadow-sm hover:border-blue-500 transition-colors disabled:opacity-50"
-                >
-                  <RefreshCw size={14} className={`text-slate-500 ${isManualRefreshing ? 'animate-spin' : ''}`} />
-                  <span className="text-xs font-bold text-blue-600 dark:text-blue-500">
-                    {isManualRefreshing ? 'ОБНОВЛЯЕМ...' : 'ОБНОВИТЬ ВСЕ (1/5 МИН)'}
-                  </span>
-                </button>
+              <div className="w-full max-w-[520px] self-end rounded-3xl border border-slate-200/90 bg-white/85 p-2.5 shadow-sm dark:border-slate-700/80 dark:bg-slate-900/70">
+                <div className="flex flex-col gap-2.5">
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <button
+                      onClick={handleManualRefresh}
+                      disabled={isManualRefreshing}
+                      className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white p-3 px-4 shadow-sm transition-colors hover:border-blue-500 disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900"
+                    >
+                      <RefreshCw size={14} className={`text-slate-500 ${isManualRefreshing ? 'animate-spin' : ''}`} />
+                      <span className="text-xs font-bold text-blue-600 dark:text-blue-500">
+                        {isManualRefreshing ? 'ОБНОВЛЯЕМ...' : 'ОБНОВИТЬ ВСЕ (1/5 МИН)'}
+                      </span>
+                    </button>
 
-                <button
-                  onClick={() => setIsBillingManagerOpen(true)}
-                  className="flex items-center gap-2 bg-cyan-50 dark:bg-cyan-500/10 text-cyan-700 border border-cyan-200 dark:border-cyan-500/20 p-3 px-5 rounded-2xl shadow-sm hover:bg-cyan-100 transition-colors"
-                >
-                  <CreditCard size={14} />
-                  <span className="text-xs font-bold uppercase">Биллинги</span>
-                </button>
+                    <button
+                      onClick={() => setIsBillingManagerOpen(true)}
+                      className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-cyan-200 bg-cyan-50 p-3 px-4 shadow-sm transition-colors hover:bg-cyan-100 dark:border-cyan-500/20 dark:bg-cyan-500/10"
+                    >
+                      <CreditCard size={14} className="text-cyan-600 dark:text-cyan-400" />
+                      <span className="text-xs font-bold uppercase text-cyan-700 dark:text-cyan-300">Биллинги</span>
+                    </button>
+                  </div>
 
-                <button
-                  onClick={() => { setEditingServerId(null); setStep('form'); setFormData({ name: '', ip: '', user: 'root', password: '', panelType: 'none', panelUrl: '', panelLogin: '', panelPassword: '', hostingAccountId: '' }); setIsFormOpen(true); }}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-2xl font-black text-sm transition-all flex items-center gap-2 shadow-xl shadow-blue-500/20 h-full"
-                >
-                  <Plus size={18} /> ДОБАВИТЬ
-                </button>
+                  <button
+                    onClick={() => { setEditingServerId(null); setStep('form'); setFormData({ name: '', ip: '', user: 'root', password: '', panelType: 'none', panelUrl: '', panelLogin: '', panelPassword: '', hostingAccountId: '' }); setIsFormOpen(true); }}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-8 py-3 font-black text-sm text-white shadow-xl shadow-blue-500/20 transition-all hover:bg-blue-700"
+                  >
+                    <Plus size={18} /> ДОБАВИТЬ СЕРВЕР
+                  </button>
+                </div>
               </div>
             </header>
 
