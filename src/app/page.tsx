@@ -595,14 +595,8 @@ export default function Dashboard() {
   const pendingServers = servers.filter((s) => !['online', 'offline'].includes(String(s.status || ''))).length;
   const serversForRenewalSoon = servers.filter((s) => {
     const days = getDaysUntil(s?.billingRenewalAt);
-    return days !== null && days >= 0 && days <= 14;
+    return days !== null && days >= 0 && days < 7;
   }).length;
-  const serversRenewalWithin14 = servers.filter((s) => {
-    const days = getDaysUntil(s?.billingRenewalAt);
-    return days !== null && days >= 0 && days <= 14;
-  });
-  const unpaidInvoicesCount = serversRenewalWithin14.reduce((acc, s) => acc + (typeof s.billingUnpaidCount === 'number' ? s.billingUnpaidCount : 0), 0);
-  const unpaidInvoicesSum = serversRenewalWithin14.reduce((acc, s) => acc + (typeof s.billingUnpaidAmount === 'number' ? s.billingUnpaidAmount : Number(s.billingUnpaidAmount || 0)), 0);
   const onlineSites = sites.filter((s) => String(s?.status || '').toLowerCase() === 'online').length;
   const offlineSites = sites.filter((s) => String(s?.status || '').toLowerCase() === 'offline').length;
   const pendingSites = sites.filter((s) => !['online', 'offline'].includes(String(s?.status || '').toLowerCase())).length;
@@ -832,15 +826,8 @@ export default function Dashboard() {
                   </div>
                   <div className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 ${serversForRenewalSoon > 0 ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300' : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300'}`}>
                     <Bell size={12} className={serversForRenewalSoon > 0 ? 'text-rose-500' : 'text-emerald-500'} />
-                    <span>На продление до 14 дней:</span>
-                    {unpaidInvoicesCount > 0 ? (
-                      <span className="flex items-center gap-2">
-                        <span className="text-red-500 dark:text-red-400 font-black">{unpaidInvoicesCount} счёт{unpaidInvoicesCount > 1 ? 'ов' : ''}</span>
-                        <span className="text-red-500 dark:text-red-400">{unpaidInvoicesSum ? `${unpaidInvoicesSum.toFixed(2)}` : ''}</span>
-                      </span>
-                    ) : (
-                      <span className={serversForRenewalSoon > 0 ? 'text-red-500 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}>{serversForRenewalSoon}</span>
-                    )}
+                    <span>На продление до 7 дней:</span>
+                    <span className={serversForRenewalSoon > 0 ? 'text-red-500 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}>{serversForRenewalSoon}</span>
                   </div>
                 </div>
               </div>
@@ -1167,18 +1154,14 @@ export default function Dashboard() {
                                 className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200/90 bg-slate-50 text-slate-600 shadow-sm dark:border-slate-600/40 dark:bg-slate-800/60 dark:text-slate-300"
                                 title={
                                   server.billingHasUnpaidOrder
-                                    ? 'Выставлен счёт в биллинге'
+                                    ? 'В личном кабинете биллинга есть неоплаченные счета по этой услуге.'
                                     : 'Оплата: индикатор обновляется при синхронизации биллинга (заказы Pending и неоплаченные счета).'
                                 }
                               >
                                 <DollarSign size={13} />
-                                {(() => {
-                                  const days = getDaysUntil(server.billingRenewalAt);
-                                  if (server.billingHasUnpaidOrder && days !== null && days <= 14) {
-                                    return <span className="absolute right-1 top-1 h-2 w-2 rounded-full border border-white bg-red-500 dark:border-[#141820]" aria-hidden />;
-                                  }
-                                  return null;
-                                })()}
+                                {server.billingHasUnpaidOrder ? (
+                                  <span className="absolute right-1 top-1 h-2 w-2 rounded-full border border-white bg-red-500 dark:border-[#141820]" aria-hidden />
+                                ) : null}
                               </span>
                             </div>
                           </div>

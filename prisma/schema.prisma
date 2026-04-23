@@ -30,8 +30,6 @@ model Server {
   billingRenewalAt DateTime?
   billingServiceId String?
   billingHasUnpaidOrder Boolean @default(false)
-  billingUnpaidCount Int @default(0)
-  billingUnpaidAmount Float @default(0)
   loadAvg         String?       @default("0.00, 0.00, 0.00")
   sysMetrics      String?       @default("{}")
   createdAt       DateTime      @default(now())
