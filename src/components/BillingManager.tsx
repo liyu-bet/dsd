@@ -272,8 +272,11 @@ export default function BillingManager({ isOpen, onClose, onChanged }: BillingMa
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-md dark:bg-black/80" onClick={() => { resetForm(); onClose(); }}>
-      <div className="w-full max-w-2xl rounded-[40px] border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-[#0F1219]" onClick={(e) => e.stopPropagation()}>
-        <div className="p-10">
+      <div
+        className="w-full max-w-2xl rounded-[40px] border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-[#0F1219] max-h-[90vh] md:max-h-[80vh] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-6 md:p-10 overflow-y-auto pr-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-200 dark:[&::-webkit-scrollbar-thumb]:bg-slate-700">
           <div className="mb-8 flex items-start justify-between gap-4">
             <div>
               <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">Биллинги</h2>
