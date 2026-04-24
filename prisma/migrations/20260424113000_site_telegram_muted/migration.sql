@@ -1,0 +1,1 @@
+ALTER TABLE "Site" ADD COLUMN "telegramMuted" BOOLEAN NOT NULL DEFAULT false;

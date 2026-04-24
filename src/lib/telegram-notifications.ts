@@ -81,13 +81,13 @@ async function alreadySent(eventKey: string) {
   return !!exists;
 }
 
-async function markSent(eventType: string, eventKey: string, payload?: unknown) {
+async function markEvent(eventType: string, eventKey: string, status: string, payload?: unknown) {
   await prisma.telegramNotificationEvent.create({
     data: {
       eventType,
       eventKey,
       payloadJson: payload ? JSON.stringify(payload) : null,
-      status: 'sent',
+      status,
     },
   }).catch(() => null);
 }
@@ -155,7 +155,10 @@ export async function sendTelegramEvent(params: {
   text: string;
 }) {
   const settings = await getSettings();
-  if (!settings.enabled || !settings.botToken) return { sent: 0, skipped: true };
+  if (!settings.enabled || !settings.botToken) {
+    await markEvent(params.eventType, params.eventKey, 'skipped', { reason: 'disabled_or_no_token' });
+    return { sent: 0, skipped: true };
+  }
   if (await alreadySent(params.eventKey)) return { sent: 0, skipped: true };
 
   const recipients = await prisma.telegramNotificationRecipient.findMany({
@@ -170,16 +173,30 @@ export async function sendTelegramEvent(params: {
     return r.notifySummary;
   });
   let sent = 0;
+  const errors: string[] = [];
   for (const recipient of filtered) {
     try {
       await sendTelegramMessage(settings.botToken, recipient.chatId, params.text);
       sent += 1;
-    } catch {
-      // best effort
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : 'send_failed');
     }
   }
-  await markSent(params.eventType, params.eventKey, { recipients: sent });
+  const status = sent > 0 ? 'sent' : 'failed';
+  await markEvent(params.eventType, params.eventKey, status, { recipients: sent, errors });
   return { sent, skipped: false };
+}
+
+function humanDurationFromChecks(checks: { status: string; createdAt: Date }[], targetStatus: 'offline' | 'online') {
+  const last = checks.find((c) => c.status === targetStatus);
+  if (!last) return '';
+  const diff = Math.max(0, Date.now() - new Date(last.createdAt).getTime());
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return '< 1 мин';
+  if (min < 60) return `${min} мин`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${h} ч ${m} мин`;
 }
 
 function countConsecutive<T>(items: T[], predicate: (x: T) => boolean) {
@@ -214,6 +231,7 @@ export async function processNotificationCycle() {
     }),
     prisma.hostingAccount.findMany({ orderBy: { name: 'asc' } }),
   ]);
+  const activeSites = sites.filter((s) => !s.telegramMuted);
 
   for (const s of servers) {
     const off = countConsecutive(s.checks, (c) => c.status === 'offline');
@@ -222,33 +240,52 @@ export async function processNotificationCycle() {
       await sendTelegramEvent({
         eventType: 'down',
         eventKey: `server-down:${s.id}:${s.checks[0]?.id || 'n/a'}`,
-        text: `🔴 Сервер недоступен\nСервер: ${s.name} (${s.ip})\nПроверок подряд offline: ${off}\nВремя: ${formatDateRu(new Date())}`,
+        text:
+          `🔴 Проблема с сервером\n` +
+          `• Сервер: ${s.name} (${s.ip})\n` +
+          `• Статус: недоступен (${off} проверок подряд)\n` +
+          `• Зафиксировано: ${formatDateRu(new Date())}\n` +
+          `• Проверь: сеть/хостинг, агент, firewall`,
       });
     }
     if (on === settings.recoverySuccessCount && s.checks.some((c, i) => i >= on && c.status === 'offline')) {
       await sendTelegramEvent({
         eventType: 'up',
         eventKey: `server-up:${s.id}:${s.checks[0]?.id || 'n/a'}`,
-        text: `🟢 Сервер восстановился\nСервер: ${s.name} (${s.ip})\nПроверок подряд online: ${on}\nВремя: ${formatDateRu(new Date())}`,
+        text:
+          `🟢 Сервер восстановился\n` +
+          `• Сервер: ${s.name} (${s.ip})\n` +
+          `• Online подряд: ${on}\n` +
+          `• Простой (оценка): ${humanDurationFromChecks(s.checks, 'offline')}\n` +
+          `• Время: ${formatDateRu(new Date())}`,
       });
     }
   }
 
-  for (const site of sites) {
+  for (const site of activeSites) {
     const off = countConsecutive(site.checks, (c) => c.status === 'offline');
     const on = countConsecutive(site.checks, (c) => c.status === 'online');
     if (off === settings.siteFailThreshold) {
       await sendTelegramEvent({
         eventType: 'down',
         eventKey: `site-down:${site.id}:${site.checks[0]?.id || 'n/a'}`,
-        text: `🔴 Сайт недоступен\nСайт: ${site.url}\nПроверок подряд offline: ${off}\nВремя: ${formatDateRu(new Date())}`,
+        text:
+          `🔴 Сайт недоступен\n` +
+          `• Сайт: ${site.url}\n` +
+          `• Offline подряд: ${off}\n` +
+          `• Последняя проверка: ${formatDateRu(site.checks[0]?.createdAt || new Date())}\n` +
+          `• Время уведомления: ${formatDateRu(new Date())}`,
       });
     }
     if (on === settings.recoverySuccessCount && site.checks.some((c, i) => i >= on && c.status === 'offline')) {
       await sendTelegramEvent({
         eventType: 'up',
         eventKey: `site-up:${site.id}:${site.checks[0]?.id || 'n/a'}`,
-        text: `🟢 Сайт восстановился\nСайт: ${site.url}\nПроверок подряд online: ${on}\nВремя: ${formatDateRu(new Date())}`,
+        text:
+          `🟢 Сайт снова доступен\n` +
+          `• Сайт: ${site.url}\n` +
+          `• Online подряд: ${on}\n` +
+          `• Время: ${formatDateRu(new Date())}`,
       });
     }
 
@@ -257,7 +294,11 @@ export async function processNotificationCycle() {
       await sendTelegramEvent({
         eventType: 'domain',
         eventKey: `domain:${site.id}:d${days}`,
-        text: `🟠 Продление домена\nДомен: ${site.url}\nДо продления: ${days} дн.\nДата: ${formatDateRu(site.domainExpiresAt)}`,
+        text:
+          `🟠 Домен скоро продлевать\n` +
+          `• Домен: ${site.url}\n` +
+          `• Осталось: ${days} дн.\n` +
+          `• Дата продления: ${formatDateRu(site.domainExpiresAt)}`,
       });
     }
   }
@@ -268,7 +309,11 @@ export async function processNotificationCycle() {
       await sendTelegramEvent({
         eventType: 'billing',
         eventKey: `billing:${h.id}:${cnt}:${h.billingUnpaid14dTotal || '0'}`,
-        text: `🔴 Неоплаченные счета\nБиллинг: ${h.name}\nСчетов: ${cnt}\nСумма: ${h.billingUnpaid14dTotal || '0.00'}`,
+        text:
+          `🔴 Есть неоплаченные счета\n` +
+          `• Биллинг: ${h.name}\n` +
+          `• Счетов: ${cnt}\n` +
+          `• Сумма: ${h.billingUnpaid14dTotal || '0.00'}`,
       });
     }
   }
@@ -278,9 +323,9 @@ export async function processNotificationCycle() {
   if (hour === settings.morningSummaryHour && settings.lastMorningSummaryDate !== todayKey) {
     const onlineServers = servers.filter((x) => x.status === 'online').length;
     const offlineServers = servers.filter((x) => x.status === 'offline').length;
-    const onlineSites = sites.filter((x) => x.status === 'online').length;
-    const offlineSites = sites.filter((x) => x.status === 'offline').length;
-    const exp14 = sites.filter((x) => {
+    const onlineSites = activeSites.filter((x) => x.status === 'online').length;
+    const offlineSites = activeSites.filter((x) => x.status === 'offline').length;
+    const exp14 = activeSites.filter((x) => {
       const d = getDaysUntil(x.domainExpiresAt);
       return d !== null && d >= 0 && d <= settings.domainRenewalDays;
     }).length;
@@ -294,10 +339,10 @@ export async function processNotificationCycle() {
       eventKey: `summary:${todayKey}`,
       text:
         `☀️ Утренний саммари\n` +
-        `Серверы: online ${onlineServers}, offline ${offlineServers}\n` +
-        `Сайты: online ${onlineSites}, offline ${offlineSites}\n` +
-        `Домены до ${settings.domainRenewalDays} дн.: ${exp14}\n` +
-        `Неоплаченные счета: ${unpaidCount} на сумму ${unpaidTotal}`,
+        `• Серверы: online ${onlineServers}, offline ${offlineServers}\n` +
+        `• Сайты (с уведомлениями): online ${onlineSites}, offline ${offlineSites}\n` +
+        `• Домены до ${settings.domainRenewalDays} дн.: ${exp14}\n` +
+        `• Неоплаченные счета: ${unpaidCount} на сумму ${unpaidTotal}`,
     });
 
     await prisma.telegramNotificationSetting.update({

@@ -75,6 +75,7 @@ model Site {
   cfAccountId        String?
   registrarAccountId String?
   domainExpiresAt    DateTime?
+  telegramMuted      Boolean            @default(false)
   apexARecord        String?
   apexARecordSource  String?
   apexARecordUpdatedAt DateTime?

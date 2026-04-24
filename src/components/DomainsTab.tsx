@@ -247,6 +247,7 @@ export default function DomainsTab({
     cfAccountId: '',
     registrarAccountId: '',
     domainExpiresAt: '',
+    telegramMuted: false,
   });
   const [cfData, setCfData] = useState({ name: '', login: '', password: '', apiToken: '', apiKey: '' });
   const [editingCfAccountId, setEditingCfAccountId] = useState<string | null>(null);
@@ -868,9 +869,9 @@ export default function DomainsTab({
         adminLogin: '',
         adminPassword: '',
         cfAccountId: '',
-      
         registrarAccountId: '',
         domainExpiresAt: '',
+        telegramMuted: false,
       });
       setHasAdmin(false);
       fetchData();
@@ -1096,6 +1097,7 @@ ${accountInfo}` : ''}${errors}`);
       cfAccountId: site.cfAccountId || '',
       registrarAccountId: shouldIgnoreRegistrarForSite(site) ? '' : (site.registrarAccountId || ''),
       domainExpiresAt: site.domainExpiresAt ? new Date(site.domainExpiresAt).toISOString().slice(0, 10) : '',
+      telegramMuted: !!site.telegramMuted,
     });
     setHasAdmin(!!site.adminUrl || !!site.adminLogin || !!site.hasAdminPassword);
     setIsFormOpen(true);
@@ -1843,6 +1845,7 @@ ${accountInfo}` : ''}${errors}`);
                   cfAccountId: '',
                   registrarAccountId: '',
                   domainExpiresAt: '',
+                  telegramMuted: false,
                 });
                 setDatePickerMonth(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
                 setHasAdmin(false);
@@ -3079,6 +3082,24 @@ ${accountInfo}` : ''}${errors}`);
                       </div>
                     )}
                   </div>
+                </div>
+
+                <div className="px-5 py-4 border border-slate-200 dark:border-slate-700 rounded-2xl bg-slate-50 dark:bg-slate-800/20">
+                  <label className="flex items-center gap-3 cursor-pointer w-fit">
+                    <input
+                      type="checkbox"
+                      checked={!formData.telegramMuted}
+                      onChange={() => setFormData((prev) => ({ ...prev, telegramMuted: !prev.telegramMuted }))}
+                      className={checkboxBaseClass}
+                      style={checkboxCheckedStyle(!formData.telegramMuted)}
+                    />
+                    <span className="font-bold text-sm text-slate-700 dark:text-slate-300">
+                      Отправлять Telegram-уведомления по этому сайту
+                    </span>
+                  </label>
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                    Если выключить, сайт останется в мониторинге, но алерты по нему в Telegram отправляться не будут.
+                  </p>
                 </div>
 
                 <div className="px-5 py-4 border border-slate-200 dark:border-slate-700 rounded-2xl bg-slate-50 dark:bg-slate-800/20">

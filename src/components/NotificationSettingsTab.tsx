@@ -27,6 +27,15 @@ type SettingsState = {
   domainRenewalDays: number;
 };
 
+type NotificationLog = {
+  id: string;
+  eventType: string;
+  eventKey: string;
+  status: string;
+  payloadJson?: string | null;
+  createdAt: string;
+};
+
 const DEFAULTS: SettingsState = {
   enabled: false,
   hasBotToken: false,
@@ -46,22 +55,26 @@ export default function NotificationSettingsTab() {
   const [saving, setSaving] = useState(false);
   const [sendingTest, setSendingTest] = useState(false);
   const [newRecipient, setNewRecipient] = useState({ name: '', chatId: '' });
+  const [logs, setLogs] = useState<NotificationLog[]>([]);
 
   const load = async () => {
     setLoading(true);
     try {
-      const [sRes, rRes] = await Promise.all([
+      const [sRes, rRes, lRes] = await Promise.all([
         fetch('/api/notifications/settings', { cache: 'no-store' }),
         fetch('/api/notifications/recipients', { cache: 'no-store' }),
+        fetch('/api/notifications/logs', { cache: 'no-store' }),
       ]);
       const sData = await sRes.json().catch(() => ({}));
       const rData = await rRes.json().catch(() => []);
+      const lData = await lRes.json().catch(() => []);
       setSettings((prev) => ({
         ...prev,
         ...sData,
         botToken: '',
       }));
       setRecipients(Array.isArray(rData) ? rData : []);
+      setLogs(Array.isArray(lData) ? lData : []);
     } finally {
       setLoading(false);
     }
@@ -144,6 +157,7 @@ export default function NotificationSettingsTab() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Не удалось отправить тест');
       alert(`Тест отправлен (${data.sent ?? 0} получателей)`);
+      await load();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Не удалось отправить тест');
     } finally {
@@ -299,6 +313,41 @@ export default function NotificationSettingsTab() {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-lg font-black uppercase tracking-wide text-slate-900 dark:text-white">Лог уведомлений</h3>
+          <button type="button" onClick={() => void load()} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
+            <RefreshCw size={12} /> Обновить
+          </button>
+        </div>
+        <div className="max-h-72 overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-700">
+          {logs.length === 0 ? (
+            <div className="p-4 text-sm text-slate-500">Пока нет отправленных событий.</div>
+          ) : (
+            <div className="divide-y divide-slate-200 dark:divide-slate-700">
+              {logs.map((row) => (
+                <div key={row.id} className="p-3 text-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full px-2 py-0.5 font-black uppercase ${
+                      row.status === 'sent'
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                        : row.status === 'failed'
+                          ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300'
+                          : 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
+                    }`}>
+                      {row.status}
+                    </span>
+                    <span className="font-black text-slate-700 dark:text-slate-200">{row.eventType}</span>
+                    <span className="text-slate-500">{new Date(row.createdAt).toLocaleString('ru-RU')}</span>
+                  </div>
+                  <div className="mt-1 font-mono text-[11px] text-slate-500 break-all">{row.eventKey}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
     </div>

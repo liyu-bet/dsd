@@ -123,6 +123,7 @@ export async function POST(req: Request) {
         cfAccountId: normalizeString(body.cfAccountId),
         registrarAccountId: normalizeString(body.registrarAccountId),
         domainExpiresAt: parseDateInput(body.domainExpiresAt),
+        telegramMuted: body.telegramMuted === true,
         tags: parseTags(body.tags),
       },
       include: {
@@ -195,6 +196,7 @@ export async function PATCH(req: Request) {
         cfAccountId: normalizeString(body.cfAccountId),
         registrarAccountId: normalizeString(body.registrarAccountId),
         domainExpiresAt: body.domainExpiresAt === '' || body.domainExpiresAt === undefined ? null : parseDateInput(body.domainExpiresAt),
+        telegramMuted: typeof body.telegramMuted === 'boolean' ? body.telegramMuted : existing.telegramMuted,
         serverId: normalizeString(body.serverId),
       },
       include: {
