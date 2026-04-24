@@ -4,6 +4,10 @@ import { prisma } from '@/lib/prisma';
 export const dynamic = 'force-dynamic';
 
 const JOB_NAMES = ['server_checks', 'site_checks'] as const;
+const INTERVAL_BY_JOB_MS: Record<string, number> = {
+  server_checks: Number(process.env.SERVER_CHECK_INTERVAL_MS || 5 * 60 * 1000),
+  site_checks: Number(process.env.SITE_CHECK_INTERVAL_MS || 10 * 60 * 1000),
+};
 
 export async function GET() {
   try {
@@ -33,6 +37,9 @@ export async function GET() {
         lockActive,
         lockUntil: lock?.lockedUntil ?? null,
         lockUpdatedAt: lock?.updatedAt ?? null,
+        workerAlive:
+          !!run &&
+          Date.now() - new Date(run.startedAt).getTime() <= 2 * (INTERVAL_BY_JOB_MS[jobName] || 10 * 60 * 1000),
         lastRun: run
           ? {
               id: run.id,

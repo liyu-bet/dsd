@@ -39,6 +39,7 @@ type NotificationLog = {
 type JobStatusRow = {
   jobName: 'server_checks' | 'site_checks' | string;
   lockActive: boolean;
+  workerAlive?: boolean;
   lockUntil?: string | null;
   lockUpdatedAt?: string | null;
   lastRun?: {
@@ -381,9 +382,14 @@ export default function NotificationSettingsTab() {
             <div key={row.jobName} className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-700 dark:bg-slate-800/40">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="font-black text-slate-800 dark:text-slate-100">{row.jobName}</span>
-                <span className={`rounded-full px-2 py-0.5 font-black uppercase ${row.lockActive ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'}`}>
-                  {row.lockActive ? 'locked' : 'free'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`rounded-full px-2 py-0.5 font-black uppercase ${row.lockActive ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'}`}>
+                    {row.lockActive ? 'locked' : 'free'}
+                  </span>
+                  <span className={`rounded-full px-2 py-0.5 font-black uppercase ${row.workerAlive ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300'}`}>
+                    {row.workerAlive ? 'воркер жив' : 'воркер stale'}
+                  </span>
+                </div>
               </div>
               <div className="space-y-1 text-slate-600 dark:text-slate-300">
                 <div>lockUntil: {row.lockUntil ? new Date(row.lockUntil).toLocaleString('ru-RU') : '—'}</div>

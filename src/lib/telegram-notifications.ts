@@ -357,7 +357,12 @@ export async function processNotificationCycle() {
           `• Проверь: сеть/хостинг, агент, firewall`,
       });
     }
-    if (on === settings.recoverySuccessCount && s.checks.some((c, i) => i >= on && c.status === 'offline')) {
+    const serverRecoveredAfterOffline =
+      on === settings.recoverySuccessCount &&
+      on > 0 &&
+      s.checks.length > on &&
+      s.checks[on]?.status === 'offline';
+    if (serverRecoveredAfterOffline) {
       await sendTelegramEvent({
         eventType: 'up',
         eventKey: `server-up:${s.id}:${s.checks[0]?.id || 'n/a'}`,
@@ -386,7 +391,12 @@ export async function processNotificationCycle() {
           `• Время уведомления: ${formatDateRu(new Date())}`,
       });
     }
-    if (on === settings.recoverySuccessCount && site.checks.some((c, i) => i >= on && c.status === 'offline')) {
+    const siteRecoveredAfterOffline =
+      on === settings.recoverySuccessCount &&
+      on > 0 &&
+      site.checks.length > on &&
+      site.checks[on]?.status === 'offline';
+    if (siteRecoveredAfterOffline) {
       await sendTelegramEvent({
         eventType: 'up',
         eventKey: `site-up:${site.id}:${site.checks[0]?.id || 'n/a'}`,
