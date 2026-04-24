@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { sendTelegramEvent } from '@/lib/telegram-notifications';
-import { getTelegramSettingsForUi } from '@/lib/telegram-notifications';
+import { buildTelegramServerLine, getTelegramSettingsForUi, sendTelegramEvent } from '@/lib/telegram-notifications';
 import { prisma } from '@/lib/prisma';
 
 const ALLOWED_TYPES = ['down', 'up', 'domain', 'billing', 'summary'] as const;
@@ -22,12 +21,13 @@ async function pickSampleSiteAndServer() {
   const site = await prisma.site.findFirst({
     where: { telegramMuted: false },
     orderBy: { updatedAt: 'desc' },
-    select: { url: true, server: { select: { name: true, ip: true } } },
+    select: { url: true, server: { select: { name: true, ip: true, hostingAccount: { select: { name: true } } } } },
   });
   return {
     siteUrl: site?.url || 'example.com',
     serverName: site?.server?.name || 'Test Server',
     serverIp: site?.server?.ip || '127.0.0.1',
+    hostingName: site?.server?.hostingAccount?.name || null,
   };
 }
 
@@ -38,7 +38,7 @@ async function messageByType(type: AllowedType, tz: string) {
     return (
       `🧪 Тест уведомления DOWN\n` +
       `• Сайт: ${sample.siteUrl}\n` +
-      `• Сервер: ${sample.serverName} (${sample.serverIp})\n` +
+      buildTelegramServerLine(sample.serverName, sample.serverIp, sample.hostingName) +
       `• Время: ${now}`
     );
   }
@@ -46,7 +46,7 @@ async function messageByType(type: AllowedType, tz: string) {
     return (
       `🧪 Тест уведомления UP\n` +
       `• Сайт: ${sample.siteUrl}\n` +
-      `• Сервер: ${sample.serverName} (${sample.serverIp})\n` +
+      buildTelegramServerLine(sample.serverName, sample.serverIp, sample.hostingName) +
       `• Online подряд: 1\n` +
       `• Время: ${now}`
     );

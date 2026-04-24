@@ -51,6 +51,15 @@ function htmlLink(label: string, url?: string | null) {
   return `<a href="${escapeHtml(String(url))}">${escapeHtml(label)}</a>`;
 }
 
+/** IP in <code> so Telegram does not tappable-link IPv4; optional hosting (billing) name after. */
+export function buildTelegramServerLine(name: string, ip: string, hostingName?: string | null) {
+  const billing =
+    hostingName && String(hostingName).trim()
+      ? ` · ${escapeHtml(String(hostingName).trim())}`
+      : '';
+  return `• Сервер: ${escapeHtml(String(name))} (<code>${escapeHtml(String(ip))}</code>)${billing}\n`;
+}
+
 function getTodayKey(tz: string) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: tz || 'Europe/Belgrade',
@@ -327,7 +336,10 @@ export async function processNotificationCycle() {
 
   const [servers, sites, hostings] = await Promise.all([
     prisma.server.findMany({
-      include: { checks: { orderBy: { createdAt: 'desc' }, take: 8 } },
+      include: {
+        checks: { orderBy: { createdAt: 'desc' }, take: 8 },
+        hostingAccount: { select: { name: true } },
+      },
     }),
     prisma.site.findMany({
       include: {
@@ -365,7 +377,7 @@ export async function processNotificationCycle() {
         eventKey: `server-down:${s.id}:after:${incidentAnchorId}`,
         text:
           `🔴 Проблема с сервером\n` +
-          `• Сервер: ${s.name} (${s.ip})\n` +
+          buildTelegramServerLine(s.name, s.ip, s.hostingAccount?.name) +
           `• Статус: недоступен (${off} проверок подряд)\n` +
           `• Зафиксировано: ${formatDateRu(new Date(), settings.timezone)}\n` +
           `• Проверь: сеть/хостинг, агент, firewall`,
@@ -384,7 +396,7 @@ export async function processNotificationCycle() {
         eventKey: `server-up:${s.id}:after:${recoveryAnchorId}`,
         text:
           `🟢 Сервер восстановился\n` +
-          `• Сервер: ${s.name} (${s.ip})\n` +
+          buildTelegramServerLine(s.name, s.ip, s.hostingAccount?.name) +
           `• Online подряд: ${on}\n` +
           `• Простой (оценка): ${humanDurationFromChecks(s.checks, 'offline')}\n` +
           `• Время: ${formatDateRu(new Date(), settings.timezone)}`,
@@ -400,7 +412,9 @@ export async function processNotificationCycle() {
     const off = countConsecutive(site.checks, (c) => c.status === 'offline');
     const on = countConsecutive(site.checks, (c) => c.status === 'online');
     const siteServer = site.serverId ? serverById.get(site.serverId) : null;
-    const serverLine = siteServer ? `• Сервер: ${siteServer.name} (${siteServer.ip})\n` : '';
+    const serverLine = siteServer
+      ? buildTelegramServerLine(siteServer.name, siteServer.ip, siteServer.hostingAccount?.name)
+      : '';
     if (off >= settings.siteFailThreshold) {
       const incidentAnchorId = site.checks[off]?.id || 'no-prev-online';
       await sendTelegramEvent({
@@ -464,7 +478,7 @@ export async function processNotificationCycle() {
       eventKey: `server-sites-summary:${serverId}:after:${recoveryAnchorId}`,
       text:
         `🟢 Сервер работает, мини-проверка сайтов завершена\n` +
-        `• Сервер: ${server.name} (${server.ip})\n` +
+        buildTelegramServerLine(server.name, server.ip, server.hostingAccount?.name) +
         `• Сайтов всего: ${relatedSites.length}\n` +
         `• Доступны: ${online}\n` +
         `• Недоступны: ${offline}`,
