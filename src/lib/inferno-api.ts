@@ -192,16 +192,24 @@ export function aggregateInferno14dUnpaidFromOrders(ordersPayload: unknown): {
   uniqueInvoiceCount: number;
   totalAmount: string;
   unpaid14dOrderIds: Set<string>;
+  nearestDueAt: Date | null;
 } {
   const rows = listInfernoOrderRows(ordersPayload);
   const byInvoice = new Map<string, number>();
   const unpaid14dOrderIds = new Set<string>();
+  let nearestDueAt: Date | null = null;
 
   for (const r of rows) {
     if (!isInfernoUnpaidOrderRow(r)) continue;
     const next = pickString(r, ['nextduedate', 'next_due_date']);
     const days = daysUntilFromIsoString(next);
     if (days === null || days > 14) continue;
+    if (next) {
+      const dueDate = new Date(next);
+      if (!Number.isNaN(dueDate.getTime()) && (!nearestDueAt || dueDate.getTime() < nearestDueAt.getTime())) {
+        nearestDueAt = dueDate;
+      }
+    }
 
     const orderId = pickString(r, ['id', 'orderid', 'order_id']);
     if (orderId) unpaid14dOrderIds.add(String(orderId).trim());
@@ -222,6 +230,7 @@ export function aggregateInferno14dUnpaidFromOrders(ordersPayload: unknown): {
     uniqueInvoiceCount: byInvoice.size,
     totalAmount: total.toFixed(2),
     unpaid14dOrderIds,
+    nearestDueAt,
   };
 }
 

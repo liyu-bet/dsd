@@ -30,6 +30,20 @@ function formatDateRu(value: Date | string | null | undefined) {
   return new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function htmlLink(label: string, url?: string | null) {
+  if (!url) return escapeHtml(label);
+  return `<a href="${escapeHtml(String(url))}">${escapeHtml(label)}</a>`;
+}
+
 function getTodayKey(tz: string) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: tz || 'Europe/Belgrade',
@@ -78,6 +92,7 @@ async function sendTelegramMessage(botToken: string, chatId: string, text: strin
     body: JSON.stringify({
       chat_id: chatId,
       text,
+      parse_mode: 'HTML',
       disable_web_page_preview: true,
     }),
   });
@@ -241,7 +256,10 @@ export async function processNotificationCycle() {
       include: { checks: { orderBy: { createdAt: 'desc' }, take: 8 } },
     }),
     prisma.site.findMany({
-      include: { checks: { orderBy: { createdAt: 'desc' }, take: 8 } },
+      include: {
+        checks: { orderBy: { createdAt: 'desc' }, take: 8 },
+        registrarAccount: true,
+      },
     }),
     prisma.hostingAccount.findMany({ orderBy: { name: 'asc' } }),
   ]);
@@ -322,10 +340,11 @@ export async function processNotificationCycle() {
         eventType: 'domain',
         eventKey: `domain:${site.id}:d${days}`,
         text:
-          `🟠 Домен скоро продлевать\n` +
-          `• Домен: ${site.url}\n` +
+          `🟠 Продление домена\n` +
+          `Домен: ${escapeHtml(site.url)}\n` +
           `• Осталось: ${days} дн.\n` +
-          `• Дата продления: ${formatDateRu(site.domainExpiresAt)}`,
+          `• Дата: ${formatDateRu(site.domainExpiresAt)}\n` +
+          `• Регистратор: ${htmlLink(site.registrarAccount?.name || 'не указан', site.registrarAccount?.url)}`,
       });
     }
   }
@@ -336,11 +355,17 @@ export async function processNotificationCycle() {
       await sendTelegramEvent({
         eventType: 'billing',
         eventKey: `billing:${h.id}:${cnt}:${h.billingUnpaid14dTotal || '0'}`,
-        text:
-          `🔴 Есть неоплаченные счета\n` +
-          `• Биллинг: ${h.name}\n` +
-          `• Счетов: ${cnt}\n` +
-          `• Сумма: ${h.billingUnpaid14dTotal || '0.00'}`,
+        text: (() => {
+          const dueDate = h.billingUnpaid14dNearestDueAt ? new Date(h.billingUnpaid14dNearestDueAt) : null;
+          const dueDays = dueDate ? getDaysUntil(dueDate) : null;
+          return (
+            `🔴 Неоплаченные счета\n` +
+            `• Биллинг: ${htmlLink(h.name, h.url)}\n` +
+            `• Счетов: ${cnt}\n` +
+            `• Сумма: ${escapeHtml(String(h.billingUnpaid14dTotal || '0.00'))}\n` +
+            `• Дедлайн оплаты: ${formatDateRu(dueDate)}${dueDays !== null ? ` (${dueDays} дн.)` : ''}`
+          );
+        })(),
       });
     }
   }
@@ -360,6 +385,10 @@ export async function processNotificationCycle() {
     const unpaidTotal = hostings
       .reduce((acc, h) => acc + (parseFloat(String(h.billingUnpaid14dTotal || '0').replace(',', '.')) || 0), 0)
       .toFixed(2);
+    const billingLinks = hostings
+      .filter((h) => Number(h.billingUnpaid14dCount || 0) > 0)
+      .map((h) => htmlLink(h.name, h.url))
+      .join(', ');
 
     await sendTelegramEvent({
       eventType: 'summary',
@@ -367,9 +396,10 @@ export async function processNotificationCycle() {
       text:
         `☀️ Утренний саммари\n` +
         `• Серверы: online ${onlineServers}, offline ${offlineServers}\n` +
-        `• Сайты (с уведомлениями): online ${onlineSites}, offline ${offlineSites}\n` +
-        `• Домены до ${settings.domainRenewalDays} дн.: ${exp14}\n` +
-        `• Неоплаченные счета: ${unpaidCount} на сумму ${unpaidTotal}`,
+        `• Сайты: online ${onlineSites}, offline ${offlineSites}\n` +
+        `• Домены для оплаты: ${exp14}\n` +
+        `• Неоплаченные сервера: ${unpaidCount} на сумму ${unpaidTotal}\n` +
+        `• Биллинги: ${billingLinks || 'нет'}`,
     });
 
     await prisma.telegramNotificationSetting.update({

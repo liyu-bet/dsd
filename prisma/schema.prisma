@@ -165,6 +165,7 @@ model HostingAccount {
   // Неоплаченные счета (уник. invoice) в окне ~14 дн., последняя sync orders
   billingUnpaid14dCount Int     @default(0)
   billingUnpaid14dTotal String?
+  billingUnpaid14dNearestDueAt DateTime?
   createdAt DateTime @default(now())
   servers   Server[]
 }

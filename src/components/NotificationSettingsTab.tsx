@@ -53,7 +53,7 @@ export default function NotificationSettingsTab() {
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [sendingTest, setSendingTest] = useState(false);
+  const [sendingTestType, setSendingTestType] = useState<string | null>(null);
   const [newRecipient, setNewRecipient] = useState({ name: '', chatId: '' });
   const [logs, setLogs] = useState<NotificationLog[]>([]);
 
@@ -150,18 +150,22 @@ export default function NotificationSettingsTab() {
     setRecipients((prev) => prev.filter((x) => x.id !== id));
   };
 
-  const sendTest = async () => {
-    setSendingTest(true);
+  const sendTest = async (eventType: 'down' | 'up' | 'domain' | 'billing' | 'summary') => {
+    setSendingTestType(eventType);
     try {
-      const res = await fetch('/api/notifications/test', { method: 'POST' });
+      const res = await fetch('/api/notifications/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventType }),
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Не удалось отправить тест');
-      alert(`Тест отправлен (${data.sent ?? 0} получателей)`);
+      alert(`Тест ${eventType.toUpperCase()} отправлен (${data.sent ?? 0} получателей)`);
       await load();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Не удалось отправить тест');
     } finally {
-      setSendingTest(false);
+      setSendingTestType(null);
     }
   };
 
@@ -262,9 +266,25 @@ export default function NotificationSettingsTab() {
           <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-700 disabled:opacity-50">
             <Check size={14} /> {saving ? 'Сохраняем…' : 'Сохранить'}
           </button>
-          <button type="button" onClick={() => void sendTest()} disabled={sendingTest} className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
-            <RefreshCw size={14} className={sendingTest ? 'animate-spin' : ''} />
-            Тест в Telegram
+          <button type="button" onClick={() => void sendTest('down')} disabled={sendingTestType !== null} className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
+            <RefreshCw size={14} className={sendingTestType === 'down' ? 'animate-spin' : ''} />
+            Тест DOWN
+          </button>
+          <button type="button" onClick={() => void sendTest('up')} disabled={sendingTestType !== null} className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
+            <RefreshCw size={14} className={sendingTestType === 'up' ? 'animate-spin' : ''} />
+            Тест UP
+          </button>
+          <button type="button" onClick={() => void sendTest('domain')} disabled={sendingTestType !== null} className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
+            <RefreshCw size={14} className={sendingTestType === 'domain' ? 'animate-spin' : ''} />
+            Тест DOMAIN
+          </button>
+          <button type="button" onClick={() => void sendTest('billing')} disabled={sendingTestType !== null} className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
+            <RefreshCw size={14} className={sendingTestType === 'billing' ? 'animate-spin' : ''} />
+            Тест BILLING
+          </button>
+          <button type="button" onClick={() => void sendTest('summary')} disabled={sendingTestType !== null} className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
+            <RefreshCw size={14} className={sendingTestType === 'summary' ? 'animate-spin' : ''} />
+            Тест SUMMARY
           </button>
         </div>
       </form>

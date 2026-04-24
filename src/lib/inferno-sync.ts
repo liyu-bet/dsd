@@ -40,6 +40,7 @@ export async function syncInfernoFromPayloads(
     data: {
       billingUnpaid14dCount: agg14.uniqueInvoiceCount,
       billingUnpaid14dTotal: agg14.totalAmount,
+      billingUnpaid14dNearestDueAt: agg14.nearestDueAt,
     },
   });
 
@@ -135,6 +136,7 @@ export async function syncInfernoHostingRemote(params: {
     data: {
       billingUnpaid14dCount: agg.uniqueInvoiceCount,
       billingUnpaid14dTotal: agg.totalAmount,
+      billingUnpaid14dNearestDueAt: agg.nearestDueAt,
     },
   });
   const matchedIds = new Set<string>();
