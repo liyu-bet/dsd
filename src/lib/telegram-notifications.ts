@@ -345,10 +345,11 @@ export async function processNotificationCycle() {
   for (const s of servers) {
     const off = countConsecutive(s.checks, (c) => c.status === 'offline');
     const on = countConsecutive(s.checks, (c) => c.status === 'online');
-    if (off === settings.serverFailThreshold) {
+    if (off >= settings.serverFailThreshold) {
+      const incidentAnchorId = s.checks[off]?.id || 'no-prev-online';
       await sendTelegramEvent({
         eventType: 'down',
-        eventKey: `server-down:${s.id}:${s.checks[0]?.id || 'n/a'}`,
+        eventKey: `server-down:${s.id}:after:${incidentAnchorId}`,
         text:
           `🔴 Проблема с сервером\n` +
           `• Сервер: ${s.name} (${s.ip})\n` +
@@ -379,10 +380,11 @@ export async function processNotificationCycle() {
   for (const site of activeSites) {
     const off = countConsecutive(site.checks, (c) => c.status === 'offline');
     const on = countConsecutive(site.checks, (c) => c.status === 'online');
-    if (off === settings.siteFailThreshold) {
+    if (off >= settings.siteFailThreshold) {
+      const incidentAnchorId = site.checks[off]?.id || 'no-prev-online';
       await sendTelegramEvent({
         eventType: 'down',
-        eventKey: `site-down:${site.id}:${site.checks[0]?.id || 'n/a'}`,
+        eventKey: `site-down:${site.id}:after:${incidentAnchorId}`,
         text:
           `🔴 Сайт недоступен\n` +
           `• Сайт: ${site.url}\n` +
