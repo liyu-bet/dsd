@@ -36,6 +36,24 @@ type NotificationLog = {
   createdAt: string;
 };
 
+type JobStatusRow = {
+  jobName: 'server_checks' | 'site_checks' | string;
+  lockActive: boolean;
+  lockUntil?: string | null;
+  lockUpdatedAt?: string | null;
+  lastRun?: {
+    id: string;
+    trigger: string;
+    status: string;
+    processed: number;
+    successCount: number;
+    failureCount: number;
+    startedAt: string;
+    finishedAt?: string | null;
+    errorText?: string | null;
+  } | null;
+};
+
 const DEFAULTS: SettingsState = {
   enabled: false,
   hasBotToken: false,
@@ -56,6 +74,7 @@ export default function NotificationSettingsTab() {
   const [sendingTestType, setSendingTestType] = useState<string | null>(null);
   const [newRecipient, setNewRecipient] = useState({ name: '', chatId: '' });
   const [logs, setLogs] = useState<NotificationLog[]>([]);
+  const [jobRows, setJobRows] = useState<JobStatusRow[]>([]);
 
   const load = async () => {
     setLoading(true);
@@ -75,13 +94,27 @@ export default function NotificationSettingsTab() {
       }));
       setRecipients(Array.isArray(rData) ? rData : []);
       setLogs(Array.isArray(lData) ? lData : []);
+      await loadJobStatus();
     } finally {
       setLoading(false);
     }
   };
 
+  const loadJobStatus = async () => {
+    const res = await fetch('/api/monitor/job-status', { cache: 'no-store' });
+    const data = await res.json().catch(() => ({}));
+    setJobRows(Array.isArray(data?.rows) ? data.rows : []);
+  };
+
   useEffect(() => {
     void load();
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void loadJobStatus();
+    }, 30000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const saveSettings = async (e: FormEvent) => {
@@ -330,6 +363,34 @@ export default function NotificationSettingsTab() {
                     <Trash2 size={14} />
                   </button>
                 </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-lg font-black uppercase tracking-wide text-slate-900 dark:text-white">Статус фоновых задач</h3>
+          <button type="button" onClick={() => void loadJobStatus()} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
+            <RefreshCw size={12} /> Обновить
+          </button>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          {(jobRows.length > 0 ? jobRows : [{ jobName: 'site_checks', lockActive: false, lastRun: null }, { jobName: 'server_checks', lockActive: false, lastRun: null }]).map((row) => (
+            <div key={row.jobName} className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-700 dark:bg-slate-800/40">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="font-black text-slate-800 dark:text-slate-100">{row.jobName}</span>
+                <span className={`rounded-full px-2 py-0.5 font-black uppercase ${row.lockActive ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'}`}>
+                  {row.lockActive ? 'locked' : 'free'}
+                </span>
+              </div>
+              <div className="space-y-1 text-slate-600 dark:text-slate-300">
+                <div>lockUntil: {row.lockUntil ? new Date(row.lockUntil).toLocaleString('ru-RU') : '—'}</div>
+                <div>last status: {row.lastRun?.status || '—'}</div>
+                <div>trigger: {row.lastRun?.trigger || '—'}</div>
+                <div>started: {row.lastRun?.startedAt ? new Date(row.lastRun.startedAt).toLocaleString('ru-RU') : '—'}</div>
+                <div>finished: {row.lastRun?.finishedAt ? new Date(row.lastRun.finishedAt).toLocaleString('ru-RU') : '—'}</div>
               </div>
             </div>
           ))}
