@@ -15,6 +15,16 @@ import { copyTextToClipboard } from '@/lib/copy-text';
 
 const SERVER_UI_REFRESH_MS = 30000;
 
+function formatBilling14dUnpaidLine(count: number, sum: string) {
+  if (count <= 0) return 'Нет неоплаченных счетов (окно 14 дн.)';
+  const n = count;
+  let word: string;
+  if (n % 10 === 1 && n % 100 !== 11) word = 'счёт';
+  else if ([2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100)) word = 'счёта';
+  else word = 'счетов';
+  return `${n} ${word} на сумму ${sum}`;
+}
+
 const LinearProgress = ({
   value,
   label,
@@ -593,10 +603,18 @@ export default function Dashboard() {
   const onlineServers = servers.filter(s => s.status === 'online').length;
   const offlineServers = servers.filter((s) => s.status === 'offline').length;
   const pendingServers = servers.filter((s) => !['online', 'offline'].includes(String(s.status || ''))).length;
-  const serversForRenewalSoon = servers.filter((s) => {
-    const days = getDaysUntil(s?.billingRenewalAt);
-    return days !== null && days >= 0 && days < 7;
-  }).length;
+  const billing14dUnpaid = useMemo(() => {
+    let count = 0;
+    let sum = 0;
+    for (const h of hostingAccounts) {
+      const c = Number((h as { billingUnpaid14dCount?: number }).billingUnpaid14dCount);
+      if (Number.isFinite(c)) count += c;
+      const raw = (h as { billingUnpaid14dTotal?: string | null }).billingUnpaid14dTotal;
+      const t = parseFloat(String(raw || '0').replace(/\s/g, '').replace(',', '.')) || 0;
+      sum += t;
+    }
+    return { count, sum: sum.toFixed(2) };
+  }, [hostingAccounts]);
   const onlineSites = sites.filter((s) => String(s?.status || '').toLowerCase() === 'online').length;
   const offlineSites = sites.filter((s) => String(s?.status || '').toLowerCase() === 'offline').length;
   const pendingSites = sites.filter((s) => !['online', 'offline'].includes(String(s?.status || '').toLowerCase())).length;
@@ -824,10 +842,24 @@ export default function Dashboard() {
                       Сайтов: <span className="text-blue-600 dark:text-blue-400">{totalSites}</span>
                     </span>
                   </div>
-                  <div className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 ${serversForRenewalSoon > 0 ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300' : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300'}`}>
-                    <Bell size={12} className={serversForRenewalSoon > 0 ? 'text-rose-500' : 'text-emerald-500'} />
-                    <span>На продление до 7 дней:</span>
-                    <span className={serversForRenewalSoon > 0 ? 'text-red-500 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}>{serversForRenewalSoon}</span>
+                  <div
+                    className={`inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-0.5 rounded-xl border px-3 py-1.5 ${
+                      billing14dUnpaid.count > 0
+                        ? 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-200'
+                        : 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200'
+                    }`}
+                  >
+                    <Bell size={12} className={billing14dUnpaid.count > 0 ? 'shrink-0 text-rose-500' : 'shrink-0 text-emerald-500'} />
+                    <span>На продление до 14 дн.:</span>
+                    <span
+                      className={
+                        billing14dUnpaid.count > 0
+                          ? 'font-black text-rose-600 dark:text-rose-300'
+                          : 'font-bold text-emerald-700 dark:text-emerald-300'
+                      }
+                    >
+                      {formatBilling14dUnpaidLine(billing14dUnpaid.count, billing14dUnpaid.sum)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1154,8 +1186,8 @@ export default function Dashboard() {
                                 className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200/90 bg-slate-50 text-slate-600 shadow-sm dark:border-slate-600/40 dark:bg-slate-800/60 dark:text-slate-300"
                                 title={
                                   server.billingHasUnpaidOrder
-                                    ? 'В личном кабинете биллинга есть неоплаченные счета по этой услуге.'
-                                    : 'Оплата: индикатор обновляется при синхронизации биллинга (заказы Pending и неоплаченные счета).'
+                                    ? 'Выставлен счет в биллинге'
+                                    : 'Оплата: обновляется при синхронизации (action=orders, окно 14 дн. по nextduedate).'
                                 }
                               >
                                 <DollarSign size={13} />

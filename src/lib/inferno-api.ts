@@ -150,11 +150,112 @@ export function extractRenewalDate(item: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/** Дней до даты (UTC 00:00), отриц. — просрочка. */
+export function daysUntilFromDate(value: Date | null | undefined): number | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  date.setHours(0, 0, 0, 0);
+  return Math.ceil((date.getTime() - today.getTime()) / 86400000);
+}
+
+function daysUntilFromIsoString(raw: string | null | undefined): number | null {
+  if (!raw || !DATE_RE.test(raw)) return null;
+  const d = new Date(raw.slice(0, 10));
+  if (Number.isNaN(d.getTime())) return null;
+  return daysUntilFromDate(d);
+}
+
+/** Список заказов из action=orders (корень или поле `orders` как object map, см. Inferno). */
+export function listInfernoOrderRows(payload: unknown): Record<string, unknown>[] {
+  const r = asRecord(payload);
+  if (r && r.orders && typeof r.orders === 'object' && !Array.isArray(r.orders)) {
+    return Object.values(r.orders)
+      .map((x) => asRecord(x))
+      .filter((x): x is Record<string, unknown> => x !== null);
+  }
+  const list = normalizeInfernoList(payload);
+  const out: Record<string, unknown>[] = [];
+  for (const item of list) {
+    const row = asRecord(item);
+    if (row) out.push(row);
+  }
+  return out;
+}
+
+/**
+ * Неоплаченные в окне nextduedate ≤ 14 дней: уник. счета (invoiceid) и order id для сопоставления с getinfo.
+ */
+export function aggregateInferno14dUnpaidFromOrders(ordersPayload: unknown): {
+  uniqueInvoiceCount: number;
+  totalAmount: string;
+  unpaid14dOrderIds: Set<string>;
+} {
+  const rows = listInfernoOrderRows(ordersPayload);
+  const byInvoice = new Map<string, number>();
+  const unpaid14dOrderIds = new Set<string>();
+
+  for (const r of rows) {
+    if (!isInfernoUnpaidOrderRow(r)) continue;
+    const next = pickString(r, ['nextduedate', 'next_due_date']);
+    const days = daysUntilFromIsoString(next);
+    if (days === null || days > 14) continue;
+
+    const orderId = pickString(r, ['id', 'orderid', 'order_id']);
+    if (orderId) unpaid14dOrderIds.add(String(orderId).trim());
+
+    const invId = pickString(r, ['invoiceid', 'invoice_id']);
+    const amountRaw = pickString(r, ['amount', 'total', 'subtotal']);
+    const parsed = amountRaw ? parseFloat(String(amountRaw).replace(/\s/g, '').replace(',', '.')) : 0;
+    const amount = Number.isFinite(parsed) ? parsed : 0;
+    const key = invId || (orderId ? `order:${orderId}` : '');
+    if (!key) continue;
+    if (!byInvoice.has(key)) {
+      byInvoice.set(key, amount);
+    }
+  }
+
+  const total = [...byInvoice.values()].reduce((a, b) => a + b, 0);
+  return {
+    uniqueInvoiceCount: byInvoice.size,
+    totalAmount: total.toFixed(2),
+    unpaid14dOrderIds,
+  };
+}
+
+/**
+ * Красный индикатор у сервера: заказ в сводке 14д + дата продления (getinfo) в окне 14 дн.
+ */
+export function infernoServerHasUnpaidBillIn14d(
+  parsed: NonNullable<ReturnType<typeof parseGetinfoResponse>>,
+  agg: ReturnType<typeof aggregateInferno14dUnpaidFromOrders>
+): boolean {
+  const d = daysUntilFromDate(parsed.renewal);
+  if (d === null || d > 14) return false;
+  const oid = String(parsed.orderId || '').trim();
+  if (oid && agg.unpaid14dOrderIds.has(oid)) return true;
+  return false;
+}
+
 /** Считает неоплачено / ожидает оплаты: заказ Pending, счёт Unpaid, paid=0, и т.п. (поля панели различаются). */
 function isInfernoUnpaidOrderRow(r: Record<string, unknown>): boolean {
   if (r.unpaid === true || r.isUnpaid === true || r.isunpaid === true) return true;
   const u = r.unpaid;
   if (typeof u === 'number' && u === 1) return true;
+
+  const paySt = String(pickString(r, ['payStatus', 'paystatus']) || '').toLowerCase();
+  if (Array.isArray(r.unpaidInvoices)) {
+    for (const x of r.unpaidInvoices) {
+      const o = asRecord(x);
+      if (o && String(pickString(o, ['status']) || '').toLowerCase() === 'unpaid') return true;
+    }
+  }
+  if (paySt === 'unpaid' || paySt === 'partial' || paySt === 'overdue' || paySt === 'due') return true;
+  if (paySt === 'paid' || paySt === 'complete' || paySt === 'completed' || paySt === 'fulfilled' || paySt === 'cancelled') {
+    return false;
+  }
 
   const paidField = r.paid;
   const explicitlyUnpaid =
@@ -171,6 +272,7 @@ function isInfernoUnpaidOrderRow(r: Record<string, unknown>): boolean {
       'invoice_status',
       'invstatus',
       'paymentstate',
+      'payStatus',
       'paystatus',
     ]) || ''
   ).toLowerCase();

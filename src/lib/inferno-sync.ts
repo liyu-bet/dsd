@@ -10,6 +10,9 @@ import {
   collectPendingOrderMeta,
   parseGetinfoResponse,
   billingUnpaidFromInfernoOrders,
+  aggregateInferno14dUnpaidFromOrders,
+  infernoServerHasUnpaidBillIn14d,
+  daysUntilFromDate,
 } from '@/lib/inferno-api';
 
 function normIp(s: string): string {
@@ -31,6 +34,15 @@ export async function syncInfernoFromPayloads(
   fetchGetService?: (serviceId: string) => Promise<unknown>,
   invoicesPayload?: unknown | null,
 ): Promise<{ matched: number; checked: number }> {
+  const agg14 = aggregateInferno14dUnpaidFromOrders(ordersPayload);
+  await prisma.hostingAccount.update({
+    where: { id: hostingId },
+    data: {
+      billingUnpaid14dCount: agg14.uniqueInvoiceCount,
+      billingUnpaid14dTotal: agg14.totalAmount,
+    },
+  });
+
   const serviceRows = normalizeInfernoList(servicesPayload);
   const orderLikeRows = [
     ...normalizeInfernoList(ordersPayload),
@@ -78,13 +90,15 @@ export async function syncInfernoFromPayloads(
 
     if (!server) continue;
 
-    const unpaid =
+    const d = daysUntilFromDate(renewal);
+    const inUnpay =
       unpaidServiceIds.has(sid) ||
       billingUnpaidFromInfernoOrders(pendingMeta, {
         serviceId: sid,
         serviceIds: [sid],
         serverIp: server.ip,
       });
+    const unpaid = inUnpay && d !== null && d <= 14;
 
     await prisma.server.update({
       where: { id: server.id },
@@ -115,6 +129,14 @@ export async function syncInfernoHostingRemote(params: {
   invoicesPayload?: unknown | null;
 }): Promise<{ matched: number; checked: number }> {
   const meta = collectPendingOrderMeta(params.ordersPayload, params.invoicesPayload);
+  const agg = aggregateInferno14dUnpaidFromOrders(params.ordersPayload);
+  await prisma.hostingAccount.update({
+    where: { id: params.hostingId },
+    data: {
+      billingUnpaid14dCount: agg.uniqueInvoiceCount,
+      billingUnpaid14dTotal: agg.totalAmount,
+    },
+  });
   const matchedIds = new Set<string>();
   let matched = 0;
   let checked = 0;
@@ -137,12 +159,17 @@ export async function syncInfernoHostingRemote(params: {
           : parsed.serviceId && parsed.serviceId !== '0'
             ? parsed.serviceId
             : parsed.billingServiceIds[0] || null;
-      const unpaid = billingUnpaidFromInfernoOrders(meta, {
-        orderId: parsed.orderId,
-        serviceId: parsed.serviceId,
-        serviceIds: parsed.billingServiceIds.length > 0 ? parsed.billingServiceIds : null,
-        serverIp: server.ip,
-      });
+      const d = daysUntilFromDate(parsed.renewal);
+      const unpaidIn14d =
+        d !== null &&
+        d <= 14 &&
+        (infernoServerHasUnpaidBillIn14d(parsed, agg) ||
+          billingUnpaidFromInfernoOrders(meta, {
+            orderId: parsed.orderId,
+            serviceId: parsed.serviceId,
+            serviceIds: parsed.billingServiceIds.length > 0 ? parsed.billingServiceIds : null,
+            serverIp: server.ip,
+          }));
 
       await prisma.server.update({
         where: { id: server.id },
@@ -150,7 +177,7 @@ export async function syncInfernoHostingRemote(params: {
           hostingAccountId: params.hostingId,
           billingServiceId: extId,
           billingRenewalAt: parsed.renewal,
-          billingHasUnpaidOrder: unpaid,
+          billingHasUnpaidOrder: unpaidIn14d,
         },
       });
       matched += 1;

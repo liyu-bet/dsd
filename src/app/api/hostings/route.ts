@@ -12,7 +12,17 @@ export async function GET() {
   try {
     const accounts = await prisma.hostingAccount.findMany({
       orderBy: { name: "asc" },
-      select: { id: true, name: true, url: true, login: true, createdAt: true, password: true, apiKey: true },
+      select: {
+        id: true,
+        name: true,
+        url: true,
+        login: true,
+        createdAt: true,
+        password: true,
+        apiKey: true,
+        billingUnpaid14dCount: true,
+        billingUnpaid14dTotal: true,
+      },
     });
 
     return NextResponse.json(
