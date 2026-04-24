@@ -83,6 +83,8 @@ model Site {
   publicDnsInfoUpdatedAt  DateTime?
   whoisInfoJson          String?
   whoisInfoUpdatedAt     DateTime?
+  unlinkedFromServerAt   DateTime?
+  scheduledDeletionAt    DateTime?
   cfAccount          CloudflareAccount? @relation(fields: [cfAccountId], references: [id])
   registrarAccount   RegistrarAccount?  @relation(fields: [registrarAccountId], references: [id])
   server             Server?            @relation(fields: [serverId], references: [id])
@@ -91,6 +93,7 @@ model Site {
   @@index([serverId])
   @@index([cfAccountId])
   @@index([registrarAccountId])
+  @@index([scheduledDeletionAt])
 }
 
 model SiteCheck {

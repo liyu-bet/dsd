@@ -177,6 +177,115 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'Сайт не найден' }, { status: 404 });
     }
 
+    const sameInclude = {
+      server: true,
+      cfAccount: { select: { id: true, name: true, login: true, createdAt: true, password: true } },
+      registrarAccount: { select: { id: true, name: true, url: true, login: true, password: true, apiKey: true, createdAt: true } },
+      checks: { orderBy: { createdAt: 'desc' as const }, take: 6 },
+    } as const;
+
+    if (body.light === true) {
+      if (body.clearUnlink === true) {
+        const updated = await prisma.site.update({
+          where: { id: body.id },
+          data: { unlinkedFromServerAt: null, scheduledDeletionAt: null },
+          include: sameInclude,
+        });
+        return NextResponse.json({
+          ...updated,
+          adminPassword: undefined,
+          hasAdminPassword: hasStoredSecret(updated.adminPassword),
+          cfAccount: updated.cfAccount
+            ? {
+                id: updated.cfAccount.id,
+                name: updated.cfAccount.name,
+                login: updated.cfAccount.login,
+                createdAt: updated.cfAccount.createdAt,
+                hasPassword: hasStoredSecret(updated.cfAccount.password),
+              }
+            : null,
+          registrarAccount: updated.registrarAccount
+            ? {
+                id: updated.registrarAccount.id,
+                name: updated.registrarAccount.name,
+                url: updated.registrarAccount.url,
+                login: updated.registrarAccount.login,
+                createdAt: updated.registrarAccount.createdAt,
+                hasPassword: hasStoredSecret(updated.registrarAccount.password),
+                hasApiKey: hasStoredSecret(updated.registrarAccount.apiKey),
+              }
+            : null,
+        });
+      }
+      if (body.scheduledDeleteInDays === 3) {
+        const t = new Date();
+        t.setDate(t.getDate() + 3);
+        const updated = await prisma.site.update({
+          where: { id: body.id },
+          data: { scheduledDeletionAt: t },
+          include: sameInclude,
+        });
+        return NextResponse.json({
+          ...updated,
+          adminPassword: undefined,
+          hasAdminPassword: hasStoredSecret(updated.adminPassword),
+          cfAccount: updated.cfAccount
+            ? {
+                id: updated.cfAccount.id,
+                name: updated.cfAccount.name,
+                login: updated.cfAccount.login,
+                createdAt: updated.cfAccount.createdAt,
+                hasPassword: hasStoredSecret(updated.cfAccount.password),
+              }
+            : null,
+          registrarAccount: updated.registrarAccount
+            ? {
+                id: updated.registrarAccount.id,
+                name: updated.registrarAccount.name,
+                url: updated.registrarAccount.url,
+                login: updated.registrarAccount.login,
+                createdAt: updated.registrarAccount.createdAt,
+                hasPassword: hasStoredSecret(updated.registrarAccount.password),
+                hasApiKey: hasStoredSecret(updated.registrarAccount.apiKey),
+              }
+            : null,
+        });
+      }
+      if (Object.prototype.hasOwnProperty.call(body, 'scheduledDeletionAt') && body.scheduledDeletionAt === null) {
+        const updated = await prisma.site.update({
+          where: { id: body.id },
+          data: { scheduledDeletionAt: null },
+          include: sameInclude,
+        });
+        return NextResponse.json({
+          ...updated,
+          adminPassword: undefined,
+          hasAdminPassword: hasStoredSecret(updated.adminPassword),
+          cfAccount: updated.cfAccount
+            ? {
+                id: updated.cfAccount.id,
+                name: updated.cfAccount.name,
+                login: updated.cfAccount.login,
+                createdAt: updated.cfAccount.createdAt,
+                hasPassword: hasStoredSecret(updated.cfAccount.password),
+              }
+            : null,
+          registrarAccount: updated.registrarAccount
+            ? {
+                id: updated.registrarAccount.id,
+                name: updated.registrarAccount.name,
+                url: updated.registrarAccount.url,
+                login: updated.registrarAccount.login,
+                createdAt: updated.registrarAccount.createdAt,
+                hasPassword: hasStoredSecret(updated.registrarAccount.password),
+                hasApiKey: hasStoredSecret(updated.registrarAccount.apiKey),
+              }
+            : null,
+        });
+      }
+      return NextResponse.json({ error: 'Invalid light payload' }, { status: 400 });
+    }
+
     const nextAdminPassword = normalizeString(body.adminPassword);
     const hasAdmin = body.hasAdmin !== false;
 

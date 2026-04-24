@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+const cleanHost = (value: string) => value.replace(/^https?:\/\//, '').split('/')[0].trim().toLowerCase();
+
+const normalizeDiscovered = (raw: string[]) => {
+  const out = new Set<string>();
+  for (const s of raw) {
+    if (typeof s !== 'string' || s.length < 2) continue;
+    const h = cleanHost(s);
+    if (h) out.add(h);
+  }
+  return out;
+};
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -38,6 +50,17 @@ export async function POST(req: NextRequest) {
       ? discoveredDomains.filter((domain) => typeof domain === 'string' && domain.length > 2)
       : [];
 
+    let previousAgentHosts = new Set<string>();
+    try {
+      const rawPrev = server.sitesJson ? JSON.parse(server.sitesJson) : [];
+      const arr = Array.isArray(rawPrev) ? rawPrev : [];
+      previousAgentHosts = normalizeDiscovered(arr as string[]);
+    } catch {
+      previousAgentHosts = new Set();
+    }
+    const newHostSet = normalizeDiscovered(discovered);
+    const removedFromAgentList = Array.from(previousAgentHosts).filter((h) => !newHostSet.has(h));
+
     const uptimeValue =
       typeof uptimeSeconds === 'number' && Number.isFinite(uptimeSeconds)
         ? `${Math.max(0, Math.floor(uptimeSeconds))}s`
@@ -71,16 +94,31 @@ export async function POST(req: NextRequest) {
 
     if (discovered.length > 0) {
       await Promise.all(
-        discovered.map((url) =>
-          prisma.site.upsert({
+        discovered.map((rawUrl) => {
+          const url = cleanHost(String(rawUrl));
+          if (!url) return Promise.resolve();
+          return prisma.site.upsert({
             where: { url },
-            update: { serverId: server.id },
+            update: { serverId: server.id, unlinkedFromServerAt: null, scheduledDeletionAt: null },
             create: { url, serverId: server.id },
-          })
-        )
+          });
+        })
       );
     }
 
+    if (removedFromAgentList.length > 0) {
+      const now = new Date();
+      await Promise.all(
+        removedFromAgentList.map((url) =>
+          prisma.site
+            .updateMany({
+              where: { url, serverId: server.id, unlinkedFromServerAt: null },
+              data: { unlinkedFromServerAt: now },
+            })
+            .catch(() => null)
+        )
+      );
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef, type FormEvent } from 'react';
 import {
   Globe, Plus, RefreshCw, Trash2, Server, ExternalLink, X, Database, FileCode,
   ShieldCheck, ChevronDown, ChevronUp, Info, Edit3, FolderOpen, Check, Lock,
-  Copy, Cloud, Filter, CornerDownRight, ArrowRight, Link2, MessageSquare, Save, Eye, EyeOff, CalendarDays, ChevronLeft, ChevronRight, Bell, BellOff, Wifi, WifiOff, Clock3
+  Copy, Cloud, Filter, CornerDownRight, ArrowRight, Link2, MessageSquare, Save, Eye, EyeOff, CalendarDays, ChevronLeft, ChevronRight, Bell, BellOff, Wifi, WifiOff, Clock3, Unplug
 } from 'lucide-react';
 
 import {
@@ -1113,6 +1113,23 @@ ${accountInfo}` : ''}${errors}`);
   const deleteSite = async (id: string) => {
     if (!confirm('Точно удалить этот сайт из мониторинга?')) return;
     await fetch(`/api/sites?id=${id}`, { method: 'DELETE' });
+    fetchData();
+  };
+
+  const patchSiteUnlinkFlags = async (
+    id: string,
+    payload: { clearUnlink?: true; scheduledDeleteInDays?: 3; scheduledDeletionAt?: null }
+  ) => {
+    const r = await fetch('/api/sites', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, light: true, ...payload }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({} as { error?: string }));
+      alert(err.error || 'Ошибка');
+      return;
+    }
     fetchData();
   };
 
@@ -2475,6 +2492,70 @@ ${accountInfo}` : ''}${errors}`);
                       >
                         <Edit3 size={14} />
                       </button>
+
+                      {(site.unlinkedFromServerAt || site.scheduledDeletionAt) && (
+                        <div className="mr-0.5 flex max-w-[9rem] flex-col items-end gap-0.5 sm:max-w-none sm:flex-row sm:items-center sm:gap-1">
+                          {site.unlinkedFromServerAt && (
+                            <span
+                              className="inline-flex items-center gap-0.5 rounded-md border border-amber-200 bg-amber-50 px-1 py-0.5 text-[9px] font-bold uppercase text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+                              title={`Домена нет в списке агента (с ${formatDateInputValue(
+                                String(site.unlinkedFromServerAt)
+                              )}) — удалите вручную по корзине или поставьте авто-удаление на 3 дн.`}
+                            >
+                              <Unplug size={10} className="shrink-0" />
+                              нет в агенте
+                            </span>
+                          )}
+                          {site.scheduledDeletionAt && (
+                            <span
+                              className="inline-flex items-center gap-0.5 rounded-md border border-rose-200 bg-rose-50 px-1 py-0.5 text-[9px] font-bold text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200"
+                              title="Авто-удаление из мониторинга"
+                            >
+                              <Clock3 size={10} className="shrink-0" />
+                              {formatDateInputValue(String(site.scheduledDeletionAt))}
+                            </span>
+                          )}
+                          {site.unlinkedFromServerAt && !site.scheduledDeletionAt && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!confirm('Поставить авто-удаление этого сайта из мониторинга через 3 дня?')) return;
+                                void patchSiteUnlinkFlags(site.id, { scheduledDeleteInDays: 3 });
+                              }}
+                              className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[9px] font-black uppercase text-slate-600 hover:border-amber-300 hover:text-amber-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                              title="Авто-удаление через 3 дня (воркер)"
+                            >
+                              3д
+                            </button>
+                          )}
+                          {site.scheduledDeletionAt && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!confirm('Отменить запланированное авто-удаление?')) return;
+                                void patchSiteUnlinkFlags(site.id, { scheduledDeletionAt: null });
+                              }}
+                              className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[9px] font-black uppercase text-slate-600 hover:border-blue-300 dark:border-slate-600 dark:bg-slate-800"
+                              title="Оставить в мониторинге (отмена таймера)"
+                            >
+                              отм.
+                            </button>
+                          )}
+                          {site.unlinkedFromServerAt && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!confirm('Снять отметку «нет в агенте»? (если домен снова исчезнет из агента, она появится снова)')) return;
+                                void patchSiteUnlinkFlags(site.id, { clearUnlink: true });
+                              }}
+                              className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[9px] font-black uppercase text-slate-500 hover:border-slate-400 dark:border-slate-600 dark:bg-slate-800"
+                              title="Снять отметку, если убрали вручную с сервера по ошибке"
+                            >
+                              сброс
+                            </button>
+                          )}
+                        </div>
+                      )}
 
                       <button
                         onClick={() => deleteSite(site.id)}

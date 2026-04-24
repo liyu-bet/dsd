@@ -431,6 +431,14 @@ export async function runSiteChecks(options: JobOptions = {}) {
 
   try {
     const result = await withJobLock(SITE_JOB_NAME, intEnv('SITE_JOB_LOCK_TTL_SEC', 600), async () => {
+      const now = new Date();
+      const scheduledRemovals = await prisma.site.deleteMany({
+        where: { scheduledDeletionAt: { not: null, lte: now } },
+      });
+      if (scheduledRemovals.count > 0) {
+        console.log(`[JOB] scheduledDeletionAt: removed ${scheduledRemovals.count} site(s)`);
+      }
+
       const shouldProcessAll = !!options.siteId || mode === 'all';
       const siteWhere = options.siteId ? { id: options.siteId } : {};
       let sites;
