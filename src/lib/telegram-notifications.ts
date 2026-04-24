@@ -364,9 +364,10 @@ export async function processNotificationCycle() {
       s.checks.length > on &&
       s.checks[on]?.status === 'offline';
     if (serverRecoveredAfterOffline) {
+      const recoveryAnchorId = s.checks[on]?.id || 'no-offline-before-recovery';
       await sendTelegramEvent({
         eventType: 'up',
-        eventKey: `server-up:${s.id}:${s.checks[0]?.id || 'n/a'}`,
+        eventKey: `server-up:${s.id}:after:${recoveryAnchorId}`,
         text:
           `🟢 Сервер восстановился\n` +
           `• Сервер: ${s.name} (${s.ip})\n` +
@@ -399,9 +400,10 @@ export async function processNotificationCycle() {
       site.checks.length > on &&
       site.checks[on]?.status === 'offline';
     if (siteRecoveredAfterOffline) {
+      const recoveryAnchorId = site.checks[on]?.id || 'no-offline-before-recovery';
       await sendTelegramEvent({
         eventType: 'up',
-        eventKey: `site-up:${site.id}:${site.checks[0]?.id || 'n/a'}`,
+        eventKey: `site-up:${site.id}:after:${recoveryAnchorId}`,
         text:
           `🟢 Сайт снова доступен\n` +
           `• Сайт: ${site.url}\n` +
