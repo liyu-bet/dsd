@@ -341,10 +341,13 @@ export async function processNotificationCycle() {
 
   const activeSites = sites.filter((s) => !s.telegramMuted);
   const renewalSites = activeSites.filter((s) => !shouldSkipRenewalAsManagedSubdomain({ url: s.url }));
+  const offlineServerIds = new Set<string>();
+  const recoveredServerAnchors = new Map<string, string>();
 
   for (const s of servers) {
     const off = countConsecutive(s.checks, (c) => c.status === 'offline');
     const on = countConsecutive(s.checks, (c) => c.status === 'online');
+    if (s.status === 'offline') offlineServerIds.add(s.id);
     if (off >= settings.serverFailThreshold) {
       const incidentAnchorId = s.checks[off]?.id || 'no-prev-online';
       await sendTelegramEvent({
@@ -365,6 +368,7 @@ export async function processNotificationCycle() {
       s.checks[on]?.status === 'offline';
     if (serverRecoveredAfterOffline) {
       const recoveryAnchorId = s.checks[on]?.id || 'no-offline-before-recovery';
+      recoveredServerAnchors.set(s.id, recoveryAnchorId);
       await sendTelegramEvent({
         eventType: 'up',
         eventKey: `server-up:${s.id}:after:${recoveryAnchorId}`,
@@ -379,6 +383,10 @@ export async function processNotificationCycle() {
   }
 
   for (const site of activeSites) {
+    if (site.serverId && offlineServerIds.has(site.serverId)) {
+      // Suppress per-site alerts while parent server is down to avoid notification storms.
+      continue;
+    }
     const off = countConsecutive(site.checks, (c) => c.status === 'offline');
     const on = countConsecutive(site.checks, (c) => c.status === 'online');
     if (off >= settings.siteFailThreshold) {
@@ -426,6 +434,25 @@ export async function processNotificationCycle() {
           `• Регистратор: ${htmlLink(site.registrarAccount?.name || 'не указан', site.registrarAccount?.url)}`,
       });
     }
+  }
+
+  for (const [serverId, recoveryAnchorId] of recoveredServerAnchors.entries()) {
+    const server = servers.find((s) => s.id === serverId);
+    if (!server) continue;
+    const relatedSites = activeSites.filter((site) => site.serverId === serverId);
+    if (relatedSites.length === 0) continue;
+    const online = relatedSites.filter((site) => site.status === 'online').length;
+    const offline = relatedSites.length - online;
+    await sendTelegramEvent({
+      eventType: 'up',
+      eventKey: `server-sites-summary:${serverId}:after:${recoveryAnchorId}`,
+      text:
+        `🟢 Сервер работает, мини-проверка сайтов завершена\n` +
+        `• Сервер: ${server.name} (${server.ip})\n` +
+        `• Сайтов всего: ${relatedSites.length}\n` +
+        `• Доступны: ${online}\n` +
+        `• Недоступны: ${offline}`,
+    });
   }
 
   for (const h of hostings) {
