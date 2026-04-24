@@ -615,6 +615,16 @@ export default function Dashboard() {
     }
     return { count, sum: sum.toFixed(2) };
   }, [hostingAccounts]);
+  const hostingUnpaid14dById = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const h of hostingAccounts) {
+      const id = String((h as { id?: string }).id || '').trim();
+      if (!id) continue;
+      const c = Number((h as { billingUnpaid14dCount?: number }).billingUnpaid14dCount);
+      map.set(id, Number.isFinite(c) ? c : 0);
+    }
+    return map;
+  }, [hostingAccounts]);
   const onlineSites = sites.filter((s) => String(s?.status || '').toLowerCase() === 'online').length;
   const offlineSites = sites.filter((s) => String(s?.status || '').toLowerCase() === 'offline').length;
   const pendingSites = sites.filter((s) => !['online', 'offline'].includes(String(s?.status || '').toLowerCase())).length;
@@ -973,6 +983,14 @@ export default function Dashboard() {
                   minute: '2-digit',
                   second: '2-digit'
                 });
+                const renewalDays = getDaysUntil(server.billingRenewalAt);
+                const hasRenewalIn14d = renewalDays !== null && renewalDays <= 14;
+                const hostingUnpaidCount = server.hostingAccount?.id
+                  ? (hostingUnpaid14dById.get(server.hostingAccount.id) || 0)
+                  : 0;
+                const hasBillingAlert = Boolean(
+                  hasRenewalIn14d && (server.billingHasUnpaidOrder || hostingUnpaidCount > 0)
+                );
 
                 return (
                   <div
@@ -1183,15 +1201,19 @@ export default function Dashboard() {
                               </div>
 
                               <span
-                                className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200/90 bg-slate-50 text-slate-600 shadow-sm dark:border-slate-600/40 dark:bg-slate-800/60 dark:text-slate-300"
+                                className={`relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border shadow-sm ${
+                                  hasBillingAlert
+                                    ? 'border-rose-200/90 bg-rose-50 text-rose-600 dark:border-rose-500/35 dark:bg-rose-500/10 dark:text-rose-300'
+                                    : 'border-slate-200/90 bg-slate-50 text-slate-600 dark:border-slate-600/40 dark:bg-slate-800/60 dark:text-slate-300'
+                                }`}
                                 title={
-                                  server.billingHasUnpaidOrder
+                                  hasBillingAlert
                                     ? 'Выставлен счет в биллинге'
                                     : 'Оплата: обновляется при синхронизации (action=orders, окно 14 дн. по nextduedate).'
                                 }
                               >
                                 <DollarSign size={13} />
-                                {server.billingHasUnpaidOrder ? (
+                                {hasBillingAlert ? (
                                   <span className="absolute right-1 top-1 h-2 w-2 rounded-full border border-white bg-red-500 dark:border-[#141820]" aria-hidden />
                                 ) : null}
                               </span>
