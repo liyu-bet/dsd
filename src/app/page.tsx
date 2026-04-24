@@ -10,6 +10,7 @@ import ServerHistory from '@/components/ServerHistory';
 import DomainsTab from '@/components/DomainsTab';
 import BillingManager from '@/components/BillingManager';
 import MainDashboardTab from '@/components/MainDashboardTab';
+import NotificationSettingsTab from '@/components/NotificationSettingsTab';
 import { getRootLikeDomain, isSubdomainSite, normalizedHost } from '@/components/domainsTab.shared';
 import { copyTextToClipboard } from '@/lib/copy-text';
 
@@ -1401,11 +1402,7 @@ export default function Dashboard() {
 
         {activeTab === 'domains' && <DomainsTab onNavigateToServer={navigateToServer} />}
 
-        {activeTab !== 'dashboard' && activeTab !== 'servers' && activeTab !== 'domains' && (
-          <div className="flex items-center justify-center h-full text-slate-400 font-bold uppercase tracking-widest text-sm">
-            Раздел в разработке...
-          </div>
-        )}
+        {activeTab === 'settings' && <NotificationSettingsTab />}
       </main>
 
       <BillingManager isOpen={isBillingManagerOpen} onClose={() => setIsBillingManagerOpen(false)} onChanged={fetchServers} />

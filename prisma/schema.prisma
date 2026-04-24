@@ -167,3 +167,41 @@ model HostingAccount {
   createdAt DateTime @default(now())
   servers   Server[]
 }
+
+model TelegramNotificationSetting {
+  id                     String   @id @default("default")
+  enabled                Boolean  @default(false)
+  botToken               String?
+  timezone               String   @default("Europe/Belgrade")
+  morningSummaryHour     Int      @default(9)
+  serverFailThreshold    Int      @default(2)
+  siteFailThreshold      Int      @default(3)
+  recoverySuccessCount   Int      @default(2)
+  domainRenewalDays      Int      @default(14)
+  lastMorningSummaryDate String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+
+model TelegramNotificationRecipient {
+  id             String   @id @default(cuid())
+  name           String
+  chatId         String
+  isActive       Boolean  @default(true)
+  notifyDown     Boolean  @default(true)
+  notifyUp       Boolean  @default(true)
+  notifyDomain   Boolean  @default(true)
+  notifyBilling  Boolean  @default(true)
+  notifySummary  Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model TelegramNotificationEvent {
+  id         String   @id @default(cuid())
+  eventKey   String   @unique
+  eventType  String
+  payloadJson String?
+  status     String   @default("sent")
+  createdAt  DateTime @default(now())
+}

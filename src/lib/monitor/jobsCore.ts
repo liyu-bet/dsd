@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { maybeSyncApexARecord } from '../apex-a-record';
 import { maybeSyncDnsAndWhois } from '../dns-whois-info';
+import { processNotificationCycle } from '../telegram-notifications';
 // CJS module without types
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { checkSiteCore } = require('./site-checker-core') as {
@@ -388,6 +389,7 @@ export async function runServerChecks(options: JobOptions = {}) {
       successCount: r.successCount,
       failureCount: r.failureCount,
     });
+    await processNotificationCycle().catch(() => null);
 
     return { success: true, jobName: SERVER_JOB_NAME, ...r };
   } catch (error) {
@@ -541,6 +543,7 @@ export async function runSiteChecks(options: JobOptions = {}) {
       successCount: r.successCount,
       failureCount: r.failureCount,
     });
+    await processNotificationCycle().catch(() => null);
 
     return { success: true, jobName: SITE_JOB_NAME, ...r };
   } catch (error) {
