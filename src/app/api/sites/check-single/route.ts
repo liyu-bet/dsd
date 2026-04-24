@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { checkSiteCore } from '@/lib/site-checker';
 import { maybeSyncApexARecord } from '@/lib/apex-a-record';
+import { processNotificationCycle } from '@/lib/telegram-notifications';
 
 export const dynamic = 'force-dynamic'; // УБИВАЕМ КЭШ
 
@@ -63,6 +64,7 @@ export async function POST(req: Request) {
       where: { id: site.id },
       include: { server: true, cfAccount: true, checks: { orderBy: { createdAt: 'desc' }, take: 6 } },
     });
+    await processNotificationCycle().catch(() => null);
 
     return NextResponse.json({ success: true, site: siteOut });
   } catch (error) {
