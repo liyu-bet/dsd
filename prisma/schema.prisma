@@ -176,7 +176,7 @@ model TelegramNotificationSetting {
   timezone               String   @default("Europe/Belgrade")
   morningSummaryHour     Int      @default(9)
   serverFailThreshold    Int      @default(2)
-  siteFailThreshold      Int      @default(3)
+  siteFailThreshold      Int      @default(2)
   recoverySuccessCount   Int      @default(2)
   domainRenewalDays      Int      @default(14)
   lastMorningSummaryDate String?

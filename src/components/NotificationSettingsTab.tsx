@@ -43,7 +43,7 @@ const DEFAULTS: SettingsState = {
   timezone: 'Europe/Belgrade',
   morningSummaryHour: 9,
   serverFailThreshold: 2,
-  siteFailThreshold: 3,
+  siteFailThreshold: 2,
   recoverySuccessCount: 2,
   domainRenewalDays: 14,
 };

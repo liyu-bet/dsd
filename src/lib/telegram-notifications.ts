@@ -64,7 +64,7 @@ async function getSettings(): Promise<Settings> {
     timezone: row.timezone || 'Europe/Belgrade',
     morningSummaryHour: row.morningSummaryHour,
     serverFailThreshold: row.serverFailThreshold,
-    siteFailThreshold: row.siteFailThreshold,
+    siteFailThreshold: Math.max(2, row.siteFailThreshold),
     recoverySuccessCount: row.recoverySuccessCount,
     domainRenewalDays: row.domainRenewalDays,
     lastMorningSummaryDate: row.lastMorningSummaryDate,
@@ -132,7 +132,7 @@ export async function saveTelegramSettings(payload: {
       serverFailThreshold:
         Number.isFinite(payload.serverFailThreshold) ? Math.max(1, Number(payload.serverFailThreshold)) : current.serverFailThreshold,
       siteFailThreshold:
-        Number.isFinite(payload.siteFailThreshold) ? Math.max(1, Number(payload.siteFailThreshold)) : current.siteFailThreshold,
+        Number.isFinite(payload.siteFailThreshold) ? Math.max(2, Number(payload.siteFailThreshold)) : current.siteFailThreshold,
       recoverySuccessCount:
         Number.isFinite(payload.recoverySuccessCount) ? Math.max(1, Number(payload.recoverySuccessCount)) : current.recoverySuccessCount,
       domainRenewalDays:
@@ -182,6 +182,10 @@ export async function sendTelegramEvent(params: {
     if (params.eventType === 'billing') return r.notifyBilling;
     return r.notifySummary;
   });
+  if (filtered.length === 0) {
+    await markEvent(params.eventType, params.eventKey, 'skipped', { reason: 'no_recipients_for_event_type' });
+    return { sent: 0, skipped: true };
+  }
   let sent = 0;
   const errors: string[] = [];
   for (const recipient of filtered) {

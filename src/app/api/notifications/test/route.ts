@@ -3,11 +3,14 @@ import { sendTelegramEvent } from '@/lib/telegram-notifications';
 
 export async function POST() {
   try {
-    const key = `test:${Date.now()}`;
+    const key = `test-down:${Date.now()}`;
     const result = await sendTelegramEvent({
-      eventType: 'summary',
+      eventType: 'down',
       eventKey: key,
-      text: `✅ Тест Telegram уведомлений\nВремя: ${new Date().toLocaleString('ru-RU')}\nЕсли видите это сообщение — настройка рабочая.`,
+      text:
+        `🧪 Тест уведомления SITE DOWN\n` +
+        `Это тестовый алерт типа "down", чтобы проверить реальные настройки получателей.\n` +
+        `Время: ${new Date().toLocaleString('ru-RU')}`,
     });
     return NextResponse.json(result);
   } catch (error) {
