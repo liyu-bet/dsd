@@ -13,6 +13,16 @@ type Settings = {
   lastMorningSummaryDate: string | null;
 };
 
+function normalizedHost(value?: string | null) {
+  if (!value) return '';
+  return String(value).replace(/^https?:\/\//, '').split('/')[0].trim().toLowerCase();
+}
+
+function getRootLikeDomain(host: string) {
+  const parts = String(host || '').toLowerCase().split('.').filter(Boolean);
+  return parts.length <= 2 ? parts.join('.') : parts.slice(-2).join('.');
+}
+
 function formatDateRu(value: Date | string | null | undefined) {
   if (!value) return '—';
   const date = new Date(value);
@@ -231,7 +241,19 @@ export async function processNotificationCycle() {
     }),
     prisma.hostingAccount.findMany({ orderBy: { name: 'asc' } }),
   ]);
+  const allHosts = new Set(sites.map((s) => normalizedHost(s.url)).filter(Boolean));
+  const shouldSkipRenewalAsManagedSubdomain = (site: { url: string }) => {
+    const host = normalizedHost(site.url);
+    if (!host) return false;
+    const parts = host.split('.').filter(Boolean);
+    if (parts.length <= 2) return false;
+    const root = getRootLikeDomain(host);
+    if (!root || root === host) return false;
+    return allHosts.has(root) || allHosts.has(`www.${root}`);
+  };
+
   const activeSites = sites.filter((s) => !s.telegramMuted);
+  const renewalSites = activeSites.filter((s) => !shouldSkipRenewalAsManagedSubdomain({ url: s.url }));
 
   for (const s of servers) {
     const off = countConsecutive(s.checks, (c) => c.status === 'offline');
@@ -289,6 +311,7 @@ export async function processNotificationCycle() {
       });
     }
 
+    if (shouldSkipRenewalAsManagedSubdomain({ url: site.url })) continue;
     const days = getDaysUntil(site.domainExpiresAt);
     if (days !== null && days >= 0 && days <= settings.domainRenewalDays) {
       await sendTelegramEvent({
@@ -325,7 +348,7 @@ export async function processNotificationCycle() {
     const offlineServers = servers.filter((x) => x.status === 'offline').length;
     const onlineSites = activeSites.filter((x) => x.status === 'online').length;
     const offlineSites = activeSites.filter((x) => x.status === 'offline').length;
-    const exp14 = activeSites.filter((x) => {
+    const exp14 = renewalSites.filter((x) => {
       const d = getDaysUntil(x.domainExpiresAt);
       return d !== null && d >= 0 && d <= settings.domainRenewalDays;
     }).length;

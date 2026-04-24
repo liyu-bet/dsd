@@ -5,7 +5,7 @@ export async function GET() {
   try {
     const rows = await prisma.telegramNotificationEvent.findMany({
       orderBy: { createdAt: 'desc' },
-      take: 80,
+      take: 30,
     });
     return NextResponse.json(rows);
   } catch (error) {

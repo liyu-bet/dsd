@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef, type FormEvent } from 'react';
 import {
   Globe, Plus, RefreshCw, Trash2, Server, ExternalLink, X, Database, FileCode,
   ShieldCheck, ChevronDown, ChevronUp, Info, Edit3, FolderOpen, Check, Lock,
-  Copy, Cloud, Filter, CornerDownRight, ArrowRight, Link2, MessageSquare, Save, Eye, EyeOff, CalendarDays, ChevronLeft, ChevronRight, Bell, Wifi, WifiOff, Clock3
+  Copy, Cloud, Filter, CornerDownRight, ArrowRight, Link2, MessageSquare, Save, Eye, EyeOff, CalendarDays, ChevronLeft, ChevronRight, Bell, BellOff, Wifi, WifiOff, Clock3
 } from 'lucide-react';
 
 import {
@@ -195,6 +195,7 @@ export default function DomainsTab({
   const [filterZones, setFilterZones] = useState<string[]>([]);
   const [filterCfAccountId, setFilterCfAccountId] = useState('');
   const [filterRegistrarAccountId, setFilterRegistrarAccountId] = useState('');
+  const [filterNotify, setFilterNotify] = useState<'all' | 'on' | 'off'>('all');
   const [filterExpiry, setFilterExpiry] = useState<'all' | 'month' | 'week' | 'expired' | 'none'>('all');
   const [sortConfig, setSortConfig] = useState({ key: 'url', direction: 'asc' });
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -226,6 +227,7 @@ export default function DomainsTab({
     tagMode: 'add' as 'add' | 'replace',
     cfAccountId: '',
     registrarAccountId: '',
+    telegramNotifyMode: '' as '' | 'on' | 'off',
   });
   const [isBulkGroupOpen, setIsBulkGroupOpen] = useState(false);
   const [isBulkTagsOpen, setIsBulkTagsOpen] = useState(false);
@@ -1194,6 +1196,11 @@ ${accountInfo}` : ''}${errors}`);
     if (filterExpiry === 'none') return 'Без даты';
     return 'Срок домена';
   }, [filterExpiry]);
+  const notifyFilterLabel = useMemo(() => {
+    if (filterNotify === 'on') return 'Уведомления: вкл';
+    if (filterNotify === 'off') return 'Уведомления: выкл';
+    return 'Уведомления';
+  }, [filterNotify]);
 
   const getDomainExpirySource = (site: any): 'whois' | 'manual' | null => {
     if (!site?.domainExpiresAt) return null;
@@ -1276,6 +1283,7 @@ ${accountInfo}` : ''}${errors}`);
       tagMode: 'add',
       cfAccountId: cfIds.length === 1 ? cfIds[0] : '',
       registrarAccountId: registrarIds.length === 1 ? registrarIds[0] : '',
+      telegramNotifyMode: '',
     });
     setIsBulkCfOpen(false);
     setIsBulkRegistrarOpen(false);
@@ -1302,6 +1310,12 @@ ${accountInfo}` : ''}${errors}`);
           : (bulkData.registrarAccountId === ''
             ? (site.registrarAccountId || '')
             : (bulkData.registrarAccountId === '__none__' ? '' : bulkData.registrarAccountId));
+        const nextTelegramMuted =
+          bulkData.telegramNotifyMode === 'on'
+            ? false
+            : bulkData.telegramNotifyMode === 'off'
+              ? true
+              : Boolean(site.telegramMuted);
 
         await fetch('/api/sites', {
           method: 'PATCH',
@@ -1318,6 +1332,7 @@ ${accountInfo}` : ''}${errors}`);
             hasAdmin: !!site.adminUrl || !!site.adminLogin || !!site.hasAdminPassword,
             cfAccountId: nextCfAccountId,
             registrarAccountId: nextRegistrarAccountId,
+            telegramMuted: nextTelegramMuted,
           }),
         });
       }));
@@ -1330,7 +1345,7 @@ ${accountInfo}` : ''}${errors}`);
       setIsBulkCfOpen(false);
       setIsBulkRegistrarOpen(false);
       setSelectedSiteIds([]);
-      setBulkData({ group: '', tags: '', tagMode: 'add', cfAccountId: '', registrarAccountId: '' });
+      setBulkData({ group: '', tags: '', tagMode: 'add', cfAccountId: '', registrarAccountId: '', telegramNotifyMode: '' });
       await fetchData();
     } catch (error) {
       console.error('Bulk update failed', error);
@@ -1568,6 +1583,24 @@ ${accountInfo}` : ''}${errors}`);
 
         <div className="relative w-full sm:w-auto">
           <div
+            onClick={() => setFilterNotify((prev) => prev === 'all' ? 'on' : prev === 'on' ? 'off' : 'all')}
+            className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 px-4 transition-all hover:border-blue-500 dark:border-slate-700 dark:bg-slate-900 sm:w-auto xl:px-3 xl:py-2.5 cursor-pointer"
+            title="Клик: все → включены → выключены"
+          >
+            {filterNotify === 'off' ? (
+              <BellOff size={16} className="text-rose-500" />
+            ) : (
+              <Bell size={16} className={filterNotify === 'on' ? 'text-emerald-500' : 'text-slate-400'} />
+            )}
+            <span className={`text-sm font-bold flex-1 sm:w-36 xl:w-28 truncate ${filterNotify !== 'all' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-700 dark:text-slate-300'}`}>
+              {notifyFilterLabel}
+            </span>
+            <ChevronDown size={14} className="text-slate-400" />
+          </div>
+        </div>
+
+        <div className="relative w-full sm:w-auto">
+          <div
             onClick={() => setIsFilterExpiryOpen(!isFilterExpiryOpen)}
             className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 px-4 transition-all hover:border-blue-500 dark:border-slate-700 dark:bg-slate-900 sm:w-auto xl:px-3 xl:py-2.5 cursor-pointer"
           >
@@ -1627,6 +1660,7 @@ ${accountInfo}` : ''}${errors}`);
           : getEffectiveRegistrarAccountId(s) === filterRegistrarAccountId)
         : true))
       .filter((s) => (filterZones.length > 0 ? filterZones.includes(getDomainZone(s.url)) : true))
+      .filter((s) => (filterNotify === 'all' ? true : filterNotify === 'on' ? !s.telegramMuted : !!s.telegramMuted))
       .filter((s) => {
         if (filterExpiry === 'all') return true;
         const days = getDaysUntilDate(s.domainExpiresAt);
@@ -1730,7 +1764,7 @@ ${accountInfo}` : ''}${errors}`);
     });
 
     return ordered;
-  }, [sites, searchQuery, filterGroup, filterTag, filterZones, filterCfAccountId, filterRegistrarAccountId, filterExpiry, sortConfig, redirectMeta]);
+  }, [sites, searchQuery, filterGroup, filterTag, filterZones, filterCfAccountId, filterRegistrarAccountId, filterNotify, filterExpiry, sortConfig, redirectMeta]);
 
   const domainsForRenewalSoon = sites.filter((site) => {
     const days = getDaysUntilDate(site.domainExpiresAt);
@@ -2409,6 +2443,17 @@ ${accountInfo}` : ''}${errors}`);
                     )}
 
                     <div className="flex w-full items-center justify-end border-t border-slate-100 pt-2 dark:border-slate-800 sm:w-auto sm:justify-start sm:border-t-0 sm:border-l sm:pt-0 sm:pl-2 sm:ml-2">
+                      <span
+                        className={`p-2.5 rounded-xl transition-all ${
+                          site.telegramMuted
+                            ? 'text-rose-400 bg-rose-50 dark:bg-rose-500/10'
+                            : 'text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10'
+                        }`}
+                        title={site.telegramMuted ? 'Telegram-уведомления выключены' : 'Telegram-уведомления включены'}
+                      >
+                        {site.telegramMuted ? <BellOff size={14} /> : <Bell size={14} />}
+                      </span>
+
                       <button
                         onClick={() => toggleSiteHistory(site.id)}
                         className={`p-2.5 rounded-xl transition-all ${
@@ -2644,6 +2689,32 @@ ${accountInfo}` : ''}${errors}`);
                       ))}
                     </div>
                   )}
+                </div>
+              </div>
+              <div>
+                <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Telegram-уведомления</label>
+                <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-1 text-xs font-black">
+                  <button
+                    type="button"
+                    onClick={() => setBulkData({ ...bulkData, telegramNotifyMode: '' })}
+                    className={`rounded-full px-3 py-1 ${bulkData.telegramNotifyMode === '' ? 'bg-slate-700 text-white' : 'text-slate-500'}`}
+                  >
+                    Не менять
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBulkData({ ...bulkData, telegramNotifyMode: 'on' })}
+                    className={`rounded-full px-3 py-1 ${bulkData.telegramNotifyMode === 'on' ? 'bg-emerald-600 text-white' : 'text-slate-500'}`}
+                  >
+                    Включить
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBulkData({ ...bulkData, telegramNotifyMode: 'off' })}
+                    className={`rounded-full px-3 py-1 ${bulkData.telegramNotifyMode === 'off' ? 'bg-rose-600 text-white' : 'text-slate-500'}`}
+                  >
+                    Выключить
+                  </button>
                 </div>
               </div>
               <div className="flex justify-end gap-3 pt-2">
