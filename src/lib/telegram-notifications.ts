@@ -161,7 +161,12 @@ async function sendTelegramMessage(botToken: string, chatId: string, text: strin
 }
 
 async function alreadySent(eventKey: string) {
-  const exists = await prisma.telegramNotificationEvent.findUnique({ where: { eventKey } });
+  const exists = await prisma.telegramNotificationEvent.findFirst({
+    where: {
+      eventKey,
+      status: { in: ['sent', 'failed'] },
+    },
+  });
   return !!exists;
 }
 

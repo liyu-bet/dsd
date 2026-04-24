@@ -525,14 +525,19 @@ export default function DomainsTab({
     const timeoutId = window.setTimeout(() => controller.abort(), 20000);
 
     try {
-      await fetch('/api/sites/check-single', {
+      const res = await fetch('/api/sites/check-single', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, queued: true }),
         signal: controller.signal,
       });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || 'Ручная проверка сайта завершилась ошибкой');
+      }
     } catch (error) {
       console.error('Ошибка ручной проверки сайта', error);
+      alert(error instanceof Error ? error.message : 'Ошибка ручной проверки сайта');
     } finally {
       window.clearTimeout(timeoutId);
     }
