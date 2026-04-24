@@ -218,7 +218,7 @@ async function checkSiteCore(siteUrl, serverIp = undefined) {
   if (serverIp && !isDnsValid) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const timeoutId = setTimeout(() => controller.abort(new Error('Origin probe timeout')), 3000);
       const originRes = await fetch(`http://${serverIp}`, {
         headers: { Host: pureDomain },
         signal: controller.signal,

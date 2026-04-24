@@ -26,11 +26,15 @@ function getRootLikeDomain(host: string) {
   return parts.length <= 2 ? parts.join('.') : parts.slice(-2).join('.');
 }
 
-function formatDateRu(value: Date | string | null | undefined) {
+function formatDateRu(value: Date | string | null | undefined, tz?: string) {
   if (!value) return '—';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
-  return new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+  return new Intl.DateTimeFormat('ru-RU', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    ...(tz ? { timeZone: tz } : {}),
+  }).format(date);
 }
 
 function escapeHtml(value: string) {
@@ -348,6 +352,7 @@ export async function processNotificationCycle() {
   const renewalSites = activeSites.filter((s) => !shouldSkipRenewalAsManagedSubdomain({ url: s.url }));
   const offlineServerIds = new Set<string>();
   const recoveredServerAnchors = new Map<string, string>();
+  const serverById = new Map(servers.map((server) => [server.id, server] as const));
 
   for (const s of servers) {
     const off = countConsecutive(s.checks, (c) => c.status === 'offline');
@@ -362,7 +367,7 @@ export async function processNotificationCycle() {
           `🔴 Проблема с сервером\n` +
           `• Сервер: ${s.name} (${s.ip})\n` +
           `• Статус: недоступен (${off} проверок подряд)\n` +
-          `• Зафиксировано: ${formatDateRu(new Date())}\n` +
+          `• Зафиксировано: ${formatDateRu(new Date(), settings.timezone)}\n` +
           `• Проверь: сеть/хостинг, агент, firewall`,
       });
     }
@@ -382,7 +387,7 @@ export async function processNotificationCycle() {
           `• Сервер: ${s.name} (${s.ip})\n` +
           `• Online подряд: ${on}\n` +
           `• Простой (оценка): ${humanDurationFromChecks(s.checks, 'offline')}\n` +
-          `• Время: ${formatDateRu(new Date())}`,
+          `• Время: ${formatDateRu(new Date(), settings.timezone)}`,
       });
     }
   }
@@ -394,6 +399,8 @@ export async function processNotificationCycle() {
     }
     const off = countConsecutive(site.checks, (c) => c.status === 'offline');
     const on = countConsecutive(site.checks, (c) => c.status === 'online');
+    const siteServer = site.serverId ? serverById.get(site.serverId) : null;
+    const serverLine = siteServer ? `• Сервер: ${siteServer.name} (${siteServer.ip})\n` : '';
     if (off >= settings.siteFailThreshold) {
       const incidentAnchorId = site.checks[off]?.id || 'no-prev-online';
       await sendTelegramEvent({
@@ -402,16 +409,19 @@ export async function processNotificationCycle() {
         text:
           `🔴 Сайт недоступен\n` +
           `• Сайт: ${site.url}\n` +
+          serverLine +
           `• Offline подряд: ${off}\n` +
-          `• Последняя проверка: ${formatDateRu(site.checks[0]?.createdAt || new Date())}\n` +
-          `• Время уведомления: ${formatDateRu(new Date())}`,
+          `• Последняя проверка: ${formatDateRu(site.checks[0]?.createdAt || new Date(), settings.timezone)}\n` +
+          `• Время уведомления: ${formatDateRu(new Date(), settings.timezone)}`,
       });
     }
+    const previousOfflineStreak = on > 0 ? countConsecutive(site.checks.slice(on), (c) => c.status === 'offline') : 0;
     const siteRecoveredAfterOffline =
       on === settings.recoverySuccessCount &&
       on > 0 &&
       site.checks.length > on &&
-      site.checks[on]?.status === 'offline';
+      site.checks[on]?.status === 'offline' &&
+      previousOfflineStreak >= settings.siteFailThreshold;
     if (siteRecoveredAfterOffline) {
       const recoveryAnchorId = site.checks[on]?.id || 'no-offline-before-recovery';
       await sendTelegramEvent({
@@ -420,8 +430,9 @@ export async function processNotificationCycle() {
         text:
           `🟢 Сайт снова доступен\n` +
           `• Сайт: ${site.url}\n` +
+          serverLine +
           `• Online подряд: ${on}\n` +
-          `• Время: ${formatDateRu(new Date())}`,
+          `• Время: ${formatDateRu(new Date(), settings.timezone)}`,
       });
     }
 
@@ -435,7 +446,7 @@ export async function processNotificationCycle() {
           `🟠 Продление домена\n` +
           `Домен: ${escapeHtml(site.url)}\n` +
           `• Осталось: ${days} дн.\n` +
-          `• Дата: ${formatDateRu(site.domainExpiresAt)}\n` +
+          `• Дата: ${formatDateRu(site.domainExpiresAt, settings.timezone)}\n` +
           `• Регистратор: ${htmlLink(site.registrarAccount?.name || 'не указан', site.registrarAccount?.url)}`,
       });
     }
@@ -474,7 +485,7 @@ export async function processNotificationCycle() {
             `• Биллинг: ${htmlLink(h.name, h.url)}\n` +
             `• Счетов: ${cnt}\n` +
             `• Сумма: ${escapeHtml(String(h.billingUnpaid14dTotal || '0.00'))}\n` +
-            `• Дедлайн оплаты: ${formatDateRu(dueDate)}${dueDays !== null ? ` (${dueDays} дн.)` : ''}`
+            `• Дедлайн оплаты: ${formatDateRu(dueDate, settings.timezone)}${dueDays !== null ? ` (${dueDays} дн.)` : ''}`
           );
         })(),
       });

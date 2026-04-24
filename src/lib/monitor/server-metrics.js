@@ -4,7 +4,7 @@ async function getServerMetrics(host, username) {
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    const timeoutId = setTimeout(() => controller.abort(new Error('Server metrics timeout')), 3000);
 
     const fetchPromise = fetch(`http://${host}:${PORT}`, {
       headers: { 'X-Auth-Token': TOKEN },
