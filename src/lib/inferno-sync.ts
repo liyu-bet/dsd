@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma';
+import { prisma } from './prisma';
 import {
   normalizeInfernoList,
   extractServiceId,
@@ -13,7 +13,7 @@ import {
   aggregateInferno14dUnpaidFromOrders,
   infernoServerHasUnpaidBillIn14d,
   daysUntilFromDate,
-} from '@/lib/inferno-api';
+} from './inferno-api';
 
 function normIp(s: string): string {
   return s.trim().toLowerCase().replace(/^\[|\]$/g, '');

@@ -1,7 +1,7 @@
-const { runServerChecks, runSiteChecks, shutdownMonitorPrisma } = require('./src/lib/monitor/jobs');
+const { runServerChecks, runSiteChecks, shutdownMonitorPrisma, releaseWorkerJobLocksOnStart } = require('./src/lib/monitor/jobs');
 
 const SERVER_INTERVAL_MS = Number(process.env.SERVER_CHECK_INTERVAL_MS || 5 * 60 * 1000);
-const SITE_INTERVAL_MS = Math.max(10 * 60 * 1000, Number(process.env.SITE_CHECK_INTERVAL_MS || 10 * 60 * 1000));
+const SITE_INTERVAL_MS = Number(process.env.SITE_CHECK_INTERVAL_MS || 10 * 60 * 1000);
 const SERVER_INITIAL_DELAY_MS = 20 * 1000;
 const SITE_INITIAL_DELAY_MS = 35 * 1000;
 
@@ -24,6 +24,8 @@ async function loop(label, delayMs, fn) {
 
 async function main() {
   console.log('[WORKER] Monitor worker started');
+  console.log(`[WORKER] Intervals: server=${SERVER_INTERVAL_MS}ms, site=${SITE_INTERVAL_MS}ms`);
+  await releaseWorkerJobLocksOnStart().catch(() => null);
   loop('server_checks', SERVER_INITIAL_DELAY_MS, () => runServerChecks({ trigger: 'worker' }));
   loop('site_checks', SITE_INITIAL_DELAY_MS, () => runSiteChecks({ trigger: 'worker' }));
 }

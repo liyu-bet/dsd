@@ -1,5 +1,8 @@
 import { prisma } from './prisma';
 import { decryptSecret, encryptSecret, hasStoredSecret } from './crypto-secrets';
+import { decryptHostingSecret } from './hosting-decrypt';
+import { infernoGetJson, resolveInfernoApiUrl } from './inferno-api';
+import { syncInfernoHostingRemote } from './inferno-sync';
 
 type Settings = {
   enabled: boolean;
@@ -64,6 +67,62 @@ function getHour(tz: string) {
       hour12: false,
     }).format(new Date())
   );
+}
+
+async function refreshBillingBeforeSummary(todayKey: string) {
+  const eventKey = `billing-sync:${todayKey}`;
+  if (await alreadySent(eventKey)) return;
+
+  const [hostings, servers] = await Promise.all([
+    prisma.hostingAccount.findMany({
+      select: { id: true, name: true, url: true, apiKey: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.server.findMany({
+      select: { id: true, ip: true, name: true },
+    }),
+  ]);
+
+  let synced = 0;
+  const errors: Array<{ hosting: string; error: string }> = [];
+  for (const h of hostings) {
+    if (!hasStoredSecret(h.apiKey)) continue;
+    const apiUrl = resolveInfernoApiUrl(h.url);
+    if (!apiUrl) continue;
+    const apiKey = await decryptHostingSecret(h.apiKey);
+    if (!apiKey?.trim()) continue;
+
+    try {
+      const [servicesPayload, ordersPayload] = await Promise.all([
+        infernoGetJson(apiUrl, apiKey.trim(), 'services'),
+        infernoGetJson(apiUrl, apiKey.trim(), 'orders'),
+      ]);
+      let invoicesPayload: unknown | null = null;
+      try {
+        invoicesPayload = await infernoGetJson(apiUrl, apiKey.trim(), 'invoices');
+      } catch {
+        invoicesPayload = null;
+      }
+
+      await syncInfernoHostingRemote({
+        hostingId: h.id,
+        servers,
+        apiUrl,
+        apiKey: apiKey.trim(),
+        servicesPayload,
+        ordersPayload,
+        invoicesPayload,
+      });
+      synced += 1;
+    } catch (error) {
+      errors.push({
+        hosting: h.name,
+        error: error instanceof Error ? error.message : 'sync_failed',
+      });
+    }
+  }
+
+  await markEvent('billing', eventKey, 'synced', { synced, errors });
 }
 
 async function getSettings(): Promise<Settings> {
@@ -167,7 +226,7 @@ export async function getTelegramSettingsForUi() {
     timezone: row.timezone,
     morningSummaryHour: row.morningSummaryHour,
     serverFailThreshold: row.serverFailThreshold,
-    siteFailThreshold: row.siteFailThreshold,
+    siteFailThreshold: Math.max(2, row.siteFailThreshold),
     recoverySuccessCount: row.recoverySuccessCount,
     domainRenewalDays: row.domainRenewalDays,
     hasBotToken: hasStoredSecret(row.botToken),
@@ -250,6 +309,12 @@ function getDaysUntil(value?: Date | string | null) {
 export async function processNotificationCycle() {
   const settings = await getSettings();
   if (!settings.enabled || !settings.botToken) return { ok: true, skipped: true };
+
+  const todayKey = getTodayKey(settings.timezone);
+  const hour = getHour(settings.timezone);
+  if (hour === settings.morningSummaryHour) {
+    await refreshBillingBeforeSummary(todayKey).catch(() => null);
+  }
 
   const [servers, sites, hostings] = await Promise.all([
     prisma.server.findMany({
@@ -370,8 +435,6 @@ export async function processNotificationCycle() {
     }
   }
 
-  const todayKey = getTodayKey(settings.timezone);
-  const hour = getHour(settings.timezone);
   if (hour === settings.morningSummaryHour && settings.lastMorningSummaryDate !== todayKey) {
     const onlineServers = servers.filter((x) => x.status === 'online').length;
     const offlineServers = servers.filter((x) => x.status === 'offline').length;

@@ -167,6 +167,15 @@ async function withJobLock<T>(
   }
 }
 
+export async function releaseWorkerJobLocksOnStart() {
+  await prisma.jobLock
+    .updateMany({
+      where: { jobName: { in: [SERVER_JOB_NAME, SITE_JOB_NAME] } },
+      data: { isRunning: false, lockedUntil: new Date(0) },
+    })
+    .catch(() => null);
+}
+
 async function cleanupServerChecks(serverId: string, now: Date) {
   const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
   const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -379,7 +388,13 @@ export async function runServerChecks(options: JobOptions = {}) {
         failureCount: 0,
         errorText: `Job already running until ${result.lockedUntil?.toISOString?.() || result.lockedUntil}`,
       });
-      return { success: true, skipped: true, jobName: SERVER_JOB_NAME };
+      return {
+        success: true,
+        skipped: true,
+        jobName: SERVER_JOB_NAME,
+        reason: 'locked',
+        lockedUntil: result.lockedUntil,
+      };
     }
 
     const r = result as { processed: number; successCount: number; failureCount: number };
@@ -413,7 +428,7 @@ export async function runSiteChecks(options: JobOptions = {}) {
   });
 
   try {
-    const result = await withJobLock(SITE_JOB_NAME, intEnv('SITE_JOB_LOCK_TTL_SEC', 1800), async () => {
+    const result = await withJobLock(SITE_JOB_NAME, intEnv('SITE_JOB_LOCK_TTL_SEC', 600), async () => {
       const shouldProcessAll =
         !!options.siteId || mode === 'all' || trigger === 'worker' || trigger === 'internal-api';
       const siteWhere = options.siteId ? { id: options.siteId } : {};
@@ -528,7 +543,13 @@ export async function runSiteChecks(options: JobOptions = {}) {
         failureCount: 0,
         errorText: `Job already running until ${result.lockedUntil?.toISOString?.() || result.lockedUntil}`,
       });
-      return { success: true, skipped: true, jobName: SITE_JOB_NAME };
+      return {
+        success: true,
+        skipped: true,
+        jobName: SITE_JOB_NAME,
+        reason: 'locked',
+        lockedUntil: result.lockedUntil,
+      };
     }
 
     const r = result as {

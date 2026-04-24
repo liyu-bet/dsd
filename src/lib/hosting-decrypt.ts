@@ -1,5 +1,5 @@
-import { decryptSecret as decryptSecretV2 } from '@/lib/crypto-secrets';
-import { decryptSecret as decryptSecretLegacy } from '@/lib/crypto';
+import { decryptSecret as decryptSecretV2 } from './crypto-secrets';
+import { decryptSecret as decryptSecretLegacy } from './crypto';
 
 export async function decryptHostingSecret(value?: string | null): Promise<string | null> {
   if (!value) return null;
