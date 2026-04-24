@@ -1,5 +1,5 @@
-import { prisma } from '@/lib/prisma';
-import { decryptSecret, encryptSecret, hasStoredSecret } from '@/lib/crypto-secrets';
+import { prisma } from './prisma';
+import { decryptSecret, encryptSecret, hasStoredSecret } from './crypto-secrets';
 
 type Settings = {
   enabled: boolean;
