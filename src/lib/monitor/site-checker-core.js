@@ -145,6 +145,7 @@ async function checkSiteCore(siteUrl, serverIp = undefined) {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
+    let hardTimeoutId;
 
     const fetchPromise = fetch(targetUrl, {
       signal: controller.signal,
@@ -155,12 +156,16 @@ async function checkSiteCore(siteUrl, serverIp = undefined) {
       cache: 'no-store',
     });
 
-    const hardTimeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Hard Timeout')), 11000)
-    );
+    const hardTimeoutPromise = new Promise((_, reject) => {
+      hardTimeoutId = setTimeout(() => {
+        controller.abort();
+        reject(new Error('Hard Timeout'));
+      }, 11000);
+    });
 
     const res = await Promise.race([fetchPromise, hardTimeoutPromise]);
     clearTimeout(timeoutId);
+    clearTimeout(hardTimeoutId);
 
     pingMs = Date.now() - start;
     statusCode = res.status;

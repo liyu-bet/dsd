@@ -419,7 +419,9 @@ export async function runServerChecks(options: JobOptions = {}) {
 export async function runSiteChecks(options: JobOptions = {}) {
   const trigger = options.trigger || 'worker';
   const batchSize = options.batchSize || intEnv('SITE_CHECK_BATCH_SIZE', 10);
-  const mode = options.mode || (trigger === 'manual' ? 'batch' : 'all');
+  const workerDefaultMode =
+    String(process.env.SITE_CHECK_WORKER_MODE || 'batch').toLowerCase() === 'all' ? 'all' : 'batch';
+  const mode = options.mode || (trigger === 'worker' ? workerDefaultMode : 'batch');
   const jobRun = await createJobRun(SITE_JOB_NAME, trigger, {
     batchSize,
     mode,
@@ -429,8 +431,7 @@ export async function runSiteChecks(options: JobOptions = {}) {
 
   try {
     const result = await withJobLock(SITE_JOB_NAME, intEnv('SITE_JOB_LOCK_TTL_SEC', 600), async () => {
-      const shouldProcessAll =
-        !!options.siteId || mode === 'all' || trigger === 'worker' || trigger === 'internal-api';
+      const shouldProcessAll = !!options.siteId || mode === 'all';
       const siteWhere = options.siteId ? { id: options.siteId } : {};
 
       const sites = await prisma.site.findMany({

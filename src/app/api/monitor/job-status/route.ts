@@ -8,6 +8,7 @@ const INTERVAL_BY_JOB_MS: Record<string, number> = {
   server_checks: Number(process.env.SERVER_CHECK_INTERVAL_MS || 5 * 60 * 1000),
   site_checks: Number(process.env.SITE_CHECK_INTERVAL_MS || 10 * 60 * 1000),
 };
+const ALIVE_MULTIPLIER = Math.max(2, Number(process.env.MONITOR_WORKER_ALIVE_MULTIPLIER || 4));
 
 export async function GET() {
   try {
@@ -31,6 +32,10 @@ export async function GET() {
       const lock = lockByName.get(jobName);
       const run = latestRuns[idx];
       const lockActive = !!lock && lock.lockedUntil > now;
+      const runStartedAt = run ? new Date(run.startedAt).getTime() : 0;
+      const runFinishedAt = run?.finishedAt ? new Date(run.finishedAt).getTime() : 0;
+      const aliveAnchorTs = Math.max(runStartedAt, runFinishedAt);
+      const aliveWindowMs = ALIVE_MULTIPLIER * (INTERVAL_BY_JOB_MS[jobName] || 10 * 60 * 1000);
 
       return {
         jobName,
@@ -39,7 +44,7 @@ export async function GET() {
         lockUpdatedAt: lock?.updatedAt ?? null,
         workerAlive:
           !!run &&
-          Date.now() - new Date(run.startedAt).getTime() <= 2 * (INTERVAL_BY_JOB_MS[jobName] || 10 * 60 * 1000),
+          Date.now() - aliveAnchorTs <= aliveWindowMs,
         lastRun: run
           ? {
               id: run.id,
