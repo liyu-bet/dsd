@@ -522,7 +522,7 @@ export default function DomainsTab({
 
   const runQueuedCheck = async (id: string) => {
     const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 20000);
+    const timeoutId = window.setTimeout(() => controller.abort(new Error('Manual site check timeout')), 60000);
 
     try {
       const res = await fetch('/api/sites/check-single', {

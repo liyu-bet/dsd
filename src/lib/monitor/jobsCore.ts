@@ -433,16 +433,55 @@ export async function runSiteChecks(options: JobOptions = {}) {
     const result = await withJobLock(SITE_JOB_NAME, intEnv('SITE_JOB_LOCK_TTL_SEC', 600), async () => {
       const shouldProcessAll = !!options.siteId || mode === 'all';
       const siteWhere = options.siteId ? { id: options.siteId } : {};
+      let sites;
+      if (shouldProcessAll) {
+        sites = await prisma.site.findMany({
+          where: siteWhere,
+          include: {
+            server: true,
+            cfAccount: true,
+          },
+          orderBy: [{ updatedAt: 'asc' }, { createdAt: 'asc' }],
+        });
+      } else {
+        const fresh = await prisma.site.findMany({
+          where: {
+            ...siteWhere,
+            checks: { none: {} },
+          },
+          include: {
+            server: true,
+            cfAccount: true,
+          },
+          orderBy: [{ createdAt: 'desc' }],
+          take: batchSize,
+        });
 
-      const sites = await prisma.site.findMany({
-        where: siteWhere,
-        include: {
-          server: true,
-          cfAccount: true,
-        },
-        orderBy: [{ updatedAt: 'asc' }, { createdAt: 'asc' }],
-        ...(shouldProcessAll ? {} : { take: batchSize }),
-      });
+        if (fresh.length >= batchSize) {
+          sites = fresh;
+        } else {
+          const needed = batchSize - fresh.length;
+          const existing = await prisma.site.findMany({
+            where: {
+              ...siteWhere,
+              ...(fresh.length
+                ? {
+                    id: {
+                      notIn: fresh.map((site) => site.id),
+                    },
+                  }
+                : {}),
+            },
+            include: {
+              server: true,
+              cfAccount: true,
+            },
+            orderBy: [{ updatedAt: 'asc' }, { createdAt: 'asc' }],
+            take: needed,
+          });
+          sites = [...fresh, ...existing];
+        }
+      }
 
       let successCount = 0;
       let failureCount = 0;

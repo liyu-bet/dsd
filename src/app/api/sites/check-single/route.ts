@@ -68,6 +68,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, site: siteOut });
   } catch (error) {
+    console.error('Failed to check single site:', error);
     return NextResponse.json({ error: 'Failed to check single site' }, { status: 500 });
   }
 }
