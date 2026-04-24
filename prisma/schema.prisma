@@ -161,7 +161,7 @@ model HostingAccount {
   login     String
   password  String?
   apiKey    String?
-  /** Неоплаченные счета (уник. invoice) в окне ≈14 дн. — последняя sync orders */
+  // Неоплаченные счета (уник. invoice) в окне ~14 дн., последняя sync orders
   billingUnpaid14dCount Int     @default(0)
   billingUnpaid14dTotal String?
   createdAt DateTime @default(now())
