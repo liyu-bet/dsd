@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 const cleanHost = (value: string) => value.replace(/^https?:\/\//, '').split('/')[0].trim().toLowerCase();
+const REMOVED_SITE_COMMENT = 'Проверить и удалить';
 
 const normalizeDiscovered = (raw: string[]) => {
   const out = new Set<string>();
@@ -108,15 +109,38 @@ export async function POST(req: NextRequest) {
 
     if (removedFromAgentList.length > 0) {
       const now = new Date();
+      const removedSites = await prisma.site.findMany({
+        where: {
+          url: { in: removedFromAgentList },
+          serverId: server.id,
+        },
+        select: {
+          id: true,
+          comment: true,
+        },
+      });
+
       await Promise.all(
-        removedFromAgentList.map((url) =>
-          prisma.site
-            .updateMany({
-              where: { url, serverId: server.id, unlinkedFromServerAt: null },
-              data: { unlinkedFromServerAt: now },
+        removedSites.map((site) => {
+          const currentComment = String(site.comment || '').trim();
+          const nextComment = currentComment.includes(REMOVED_SITE_COMMENT)
+            ? currentComment
+            : currentComment
+              ? `${currentComment}\n${REMOVED_SITE_COMMENT}`
+              : REMOVED_SITE_COMMENT;
+
+          return prisma.site
+            .update({
+              where: { id: site.id },
+              data: {
+                serverId: null,
+                unlinkedFromServerAt: now,
+                scheduledDeletionAt: null,
+                comment: nextComment,
+              },
             })
-            .catch(() => null)
-        )
+            .catch(() => null);
+        })
       );
     }
 
