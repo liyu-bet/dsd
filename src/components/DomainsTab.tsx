@@ -193,6 +193,7 @@ export default function DomainsTab({
   const [filterGroup, setFilterGroup] = useState('');
   const [filterTag, setFilterTag] = useState('');
   const [filterZones, setFilterZones] = useState<string[]>([]);
+  const [filterServerId, setFilterServerId] = useState('');
   const [filterCfAccountId, setFilterCfAccountId] = useState('');
   const [filterRegistrarAccountId, setFilterRegistrarAccountId] = useState('');
   const [filterExpiry, setFilterExpiry] = useState<'all' | 'month' | 'week' | 'expired' | 'none'>('all');
@@ -212,6 +213,7 @@ export default function DomainsTab({
   const [isFilterTagOpen, setIsFilterTagOpen] = useState(false);
   const [isFilterZoneOpen, setIsFilterZoneOpen] = useState(false);
   const [filterZoneQuery, setFilterZoneQuery] = useState('');
+  const [isFilterServerOpen, setIsFilterServerOpen] = useState(false);
   const [isFilterCfOpen, setIsFilterCfOpen] = useState(false);
   const [isFilterRegistrarOpen, setIsFilterRegistrarOpen] = useState(false);
   const [isFilterExpiryOpen, setIsFilterExpiryOpen] = useState(false);
@@ -354,6 +356,7 @@ export default function DomainsTab({
         setIsFilterTagOpen(false);
         setIsFilterZoneOpen(false);
         setFilterZoneQuery('');
+        setIsFilterServerOpen(false);
         setIsFilterCfOpen(false);
         setIsFilterRegistrarOpen(false);
         setIsFilterExpiryOpen(false);
@@ -432,6 +435,7 @@ export default function DomainsTab({
       setIsFilterTagOpen(false);
       setIsFilterZoneOpen(false);
       setFilterZoneQuery('');
+      setIsFilterServerOpen(false);
       setIsFilterCfOpen(false);
       setIsFilterRegistrarOpen(false);
       setIsFilterExpiryOpen(false);
@@ -1163,9 +1167,14 @@ ${accountInfo}` : ''}${errors}`);
     [sites]
   );
   const autoFilterTags = useMemo(() => {
-    const base = ['Cloudflare', 'Поддомен', 'Домен 2 ур.', 'Редирект', 'С уведомлениями'];
+    const base = ['Cloudflare', 'Поддомен', 'Домен 2 ур.', 'Редирект', 'Уведомления'];
     return whoisOpenCount > 0 ? [...base, 'WHOIS открыт'] : base;
   }, [whoisOpenCount]);
+  const serverFilterLabel = useMemo(() => {
+    if (!filterServerId) return 'Сервер';
+    if (filterServerId === '__none__') return 'Без сервера';
+    return servers.find((s) => s.id === filterServerId)?.name || 'Сервер';
+  }, [filterServerId, servers]);
   const filteredCfAccounts = useMemo(() => {
     const q = cfSelectQuery.trim().toLowerCase();
     if (!q) return cfAccounts;
@@ -1392,7 +1401,7 @@ ${accountInfo}` : ''}${errors}`);
       window.removeEventListener('scroll', handlePinnedFilters);
       window.removeEventListener('resize', handlePinnedFilters);
     };
-  }, [sites.length, searchQuery, filterGroup, filterTag, filterZones, filterCfAccountId, filterRegistrarAccountId, filterExpiry]);
+  }, [sites.length, searchQuery, filterGroup, filterTag, filterZones, filterServerId, filterCfAccountId, filterRegistrarAccountId, filterExpiry]);
 
   useEffect(() => {
     const handleScrollTopButton = () => {
@@ -1502,23 +1511,23 @@ ${accountInfo}` : ''}${errors}`);
 
         <div className="relative w-full sm:w-auto">
           <div
-            onClick={() => setIsFilterCfOpen(!isFilterCfOpen)}
+            onClick={() => setIsFilterServerOpen(!isFilterServerOpen)}
             className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 px-4 transition-all hover:border-blue-500 dark:border-slate-700 dark:bg-slate-900 sm:w-auto xl:px-3 xl:py-2.5 cursor-pointer"
           >
-            <Cloud size={16} className={filterCfAccountId ? 'text-orange-500' : 'text-slate-400'} />
-            <span className={`text-sm font-bold flex-1 sm:w-36 xl:w-28 truncate ${filterCfAccountId ? 'text-orange-600 dark:text-orange-400' : 'text-slate-700 dark:text-slate-300'}`}>
-              {cfFilterLabel}
+            <Server size={16} className={filterServerId ? 'text-cyan-500' : 'text-slate-400'} />
+            <span className={`text-sm font-bold flex-1 sm:w-36 xl:w-28 truncate ${filterServerId ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-700 dark:text-slate-300'}`}>
+              {serverFilterLabel}
             </span>
             <ChevronDown size={14} className="text-slate-400" />
           </div>
-          {isFilterCfOpen && (
+          {isFilterServerOpen && (
             <div className="absolute top-full right-0 mt-2 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl z-[160] py-1 max-h-60 overflow-y-auto animate-in fade-in">
-              <div onClick={() => { setFilterCfAccountId(''); setIsFilterCfOpen(false); }} className="px-4 py-2.5 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer border-b border-slate-100 dark:border-slate-700">Сбросить фильтр</div>
-              <div onClick={() => { setFilterCfAccountId('__none__'); setIsFilterCfOpen(false); }} className="px-4 py-2 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer">Не привязан</div>
+              <div onClick={() => { setFilterServerId(''); setIsFilterServerOpen(false); }} className="px-4 py-2.5 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer border-b border-slate-100 dark:border-slate-700">Сбросить фильтр</div>
+              <div onClick={() => { setFilterServerId('__none__'); setIsFilterServerOpen(false); }} className="px-4 py-2 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer">Без сервера</div>
               <div className="mx-3 my-1 border-t border-slate-200 dark:border-slate-700" />
-              {cfAccounts.map((a) => (
-                <div key={a.id} onClick={() => { setFilterCfAccountId(a.id); setIsFilterCfOpen(false); }} className="px-4 py-2 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer">
-                  {a.name}
+              {servers.map((s) => (
+                <div key={s.id} onClick={() => { setFilterServerId(s.id); setIsFilterServerOpen(false); }} className="px-4 py-2 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer">
+                  {s.name}
                 </div>
               ))}
             </div>
@@ -1552,13 +1561,38 @@ ${accountInfo}` : ''}${errors}`);
 
         <div className="relative w-full sm:w-auto">
           <div
-          onClick={() => {
-            setIsFilterZoneOpen((prev) => {
-              const next = !prev;
-              if (!next) setFilterZoneQuery('');
-              return next;
-            });
-          }}
+            onClick={() => setIsFilterCfOpen(!isFilterCfOpen)}
+            className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 px-4 transition-all hover:border-blue-500 dark:border-slate-700 dark:bg-slate-900 sm:w-auto xl:px-3 xl:py-2.5 cursor-pointer"
+          >
+            <Cloud size={16} className={filterCfAccountId ? 'text-orange-500' : 'text-slate-400'} />
+            <span className={`text-sm font-bold flex-1 sm:w-36 xl:w-28 truncate ${filterCfAccountId ? 'text-orange-600 dark:text-orange-400' : 'text-slate-700 dark:text-slate-300'}`}>
+              {cfFilterLabel}
+            </span>
+            <ChevronDown size={14} className="text-slate-400" />
+          </div>
+          {isFilterCfOpen && (
+            <div className="absolute top-full right-0 mt-2 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl z-[160] py-1 max-h-60 overflow-y-auto animate-in fade-in">
+              <div onClick={() => { setFilterCfAccountId(''); setIsFilterCfOpen(false); }} className="px-4 py-2.5 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer border-b border-slate-100 dark:border-slate-700">Сбросить фильтр</div>
+              <div onClick={() => { setFilterCfAccountId('__none__'); setIsFilterCfOpen(false); }} className="px-4 py-2 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer">Не привязан</div>
+              <div className="mx-3 my-1 border-t border-slate-200 dark:border-slate-700" />
+              {cfAccounts.map((a) => (
+                <div key={a.id} onClick={() => { setFilterCfAccountId(a.id); setIsFilterCfOpen(false); }} className="px-4 py-2 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer">
+                  {a.name}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="relative w-full sm:w-auto">
+          <div
+            onClick={() => {
+              setIsFilterZoneOpen((prev) => {
+                const next = !prev;
+                if (!next) setFilterZoneQuery('');
+                return next;
+              });
+            }}
             className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 px-4 transition-all hover:border-blue-500 dark:border-slate-700 dark:bg-slate-900 sm:w-auto xl:px-3 xl:py-2.5 cursor-pointer"
           >
             <Globe size={16} className={filterZones.length > 0 ? 'text-emerald-500' : 'text-slate-400'} />
@@ -1658,6 +1692,9 @@ ${accountInfo}` : ''}${errors}`);
     const baseSites = [...sites]
       .filter((s) => s.url.toLowerCase().includes(searchQuery.toLowerCase()))
       .filter((s) => (filterGroup ? s.group === filterGroup : true))
+      .filter((s) => (filterServerId
+        ? (filterServerId === '__none__' ? !s.serverId : s.serverId === filterServerId)
+        : true))
       .filter((s) => (filterCfAccountId
         ? (filterCfAccountId === '__none__' ? !s.cfAccountId : s.cfAccountId === filterCfAccountId)
         : true))
@@ -1700,7 +1737,7 @@ ${accountInfo}` : ''}${errors}`);
         return hasPublicWhoisData(site);
       }
 
-      if (filterTag === 'С уведомлениями') {
+      if (filterTag === 'Уведомления' || filterTag === 'С уведомлениями') {
         return !site.telegramMuted;
       }
 
@@ -1774,7 +1811,7 @@ ${accountInfo}` : ''}${errors}`);
     });
 
     return ordered;
-  }, [sites, searchQuery, filterGroup, filterTag, filterZones, filterCfAccountId, filterRegistrarAccountId, filterExpiry, sortConfig, redirectMeta]);
+  }, [sites, searchQuery, filterGroup, filterTag, filterZones, filterServerId, filterCfAccountId, filterRegistrarAccountId, filterExpiry, sortConfig, redirectMeta]);
 
   const domainsForRenewalSoon = sites.filter((site) => {
     const days = getDaysUntilDate(site.domainExpiresAt);
